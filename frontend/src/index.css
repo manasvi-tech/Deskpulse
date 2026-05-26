@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #0D0D1A;
+    color: #E2E8F0;
+    font-family: 'Inter', 'Sora', system-ui, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  /* Count-up animation for KPI numbers */
+  .kpi-number {
+    @apply font-bold font-mono tabular-nums;
+    transition: all 300ms ease-out;
+  }
+}

@@ -1,0 +1,112 @@
+import React from 'react'
+import useStore from '../store/useStore'
+import { useAnomalies } from '../hooks/useAnomalies'
+
+const PAGES = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'anomalies', label: 'Anomalies' },
+  { id: 'simulator', label: 'Simulator' },
+]
+
+export default function NavBar({ activePage, setActivePage }) {
+  const wsConnected = useStore((s) => s.wsConnected)
+  const gyms = useStore((s) => s.gyms)
+  const selectedGymId = useStore((s) => s.selectedGymId)
+  const selectGym = useStore((s) => s.selectGym)
+  const { activeCount } = useAnomalies()
+
+  return (
+    <nav
+      className="sticky top-0 z-50 border-b border-slate-800 bg-[#1A1A2E]"
+      style={{ minWidth: '1280px' }}
+    >
+      <div className="flex items-center justify-between px-6 h-14">
+        {/* Logo */}
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-teal-400 font-bold text-lg tracking-tight font-mono">
+            ⚡ WTF LivePulse
+          </span>
+
+          {/* WS indicator */}
+          <div className="relative flex items-center gap-1.5">
+            <span className="relative flex h-2.5 w-2.5">
+              {wsConnected ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400" />
+                </>
+              ) : (
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              )}
+            </span>
+            <span
+              className={`text-xs font-medium ${
+                wsConnected ? 'text-green-400' : 'text-red-400'
+              }`}
+            >
+              {wsConnected ? 'Live' : 'Disconnected'}
+            </span>
+          </div>
+        </div>
+
+        {/* Gym selector */}
+        <div className="flex-1 mx-6 overflow-x-auto">
+          <div className="flex gap-1 min-w-max">
+            {gyms.map((gym) => {
+              const shortName = gym.name.replace('WTF Gyms — ', '')
+              const isSelected = gym.id === selectedGymId
+              return (
+                <button
+                  key={gym.id}
+                  onClick={() => selectGym(gym.id)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium whitespace-nowrap transition-colors ${
+                    isSelected
+                      ? 'bg-teal-500 text-white'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                  }`}
+                  data-testid={`gym-tab-${gym.id}`}
+                >
+                  {shortName}
+                </button>
+              )
+            })}
+            {gyms.length === 0 && (
+              <div className="flex gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse bg-slate-700 rounded h-7 w-24"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Page nav */}
+        <div className="flex items-center gap-1 shrink-0">
+          {PAGES.map((page) => (
+            <button
+              key={page.id}
+              onClick={() => setActivePage(page.id)}
+              className={`relative px-4 py-1.5 rounded text-sm font-medium transition-colors ${
+                activePage === page.id
+                  ? 'bg-teal-500/20 text-teal-400'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+              }`}
+              data-testid={`nav-${page.id}`}
+            >
+              {page.label}
+              {page.id === 'anomalies' && activeCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {activeCount > 99 ? '99+' : activeCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </nav>
+  )
+}

@@ -1,0 +1,38 @@
+{
+  "name": "wtf-livepulse-backend",
+  "version": "1.0.0",
+  "description": "WTF LivePulse — Real-time gym operations backend",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "jest --coverage --forceExit --runInBand",
+    "test:coverage": "jest --coverage --forceExit --runInBand",
+    "test:unit": "jest tests/unit --coverage --runInBand",
+    "test:integration": "jest tests/integration --coverage --forceExit --runInBand"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "pg": "^8.12.0",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/db/migrations/**",
+      "!src/db/seeds/**"
+    ],
+    "coverageReporters": ["text", "lcov", "html"],
+    "testTimeout": 30000
+  }
+}
