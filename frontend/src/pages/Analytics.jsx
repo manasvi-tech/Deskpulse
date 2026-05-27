@@ -1,8 +1,8 @@
-// ⚠️ PATCH-v5 — Revenue chart + RatioDonut fixed to match actual API shapes.
-// API returns { analytics: { heatmap, revenue_chart, churn_risk, member_stats } }
-// Revenue is single total-per-day: { date, revenue, payment_count } — no plan breakdown.
+// ⚠️ PATCH-v6 — Revenue chart now uses stacked bars broken down by plan type.
+// Backend now returns [{ date, plan_type, revenue, payment_count }] (shape-B).
+// normaliseRevenue() pivots multiple rows per date into { date, monthly, quarterly, annual }.
 // member_stats has monthly_count/quarterly_count/annual_count — no new/renewal keys.
-console.log('%c✅ ANALYTICS PATCH-v5 LOADED — revenue_chart + member_stats shapes fixed', 'color:#2dd4bf;font-weight:bold;font-size:13px')
+console.log('%c✅ ANALYTICS PATCH-v6 LOADED — stacked revenue chart by plan type', 'color:#2dd4bf;font-weight:bold;font-size:13px')
 
 import React, { useEffect, useState, useMemo } from 'react'
 import {
@@ -119,29 +119,42 @@ function PeakHoursHeatmap({ heatmapData }) {
 
 // ── Revenue Chart ─────────────────────────────────────────────────────────────
 //
-// API shape: [{ date: "2026-04-27T00:00:00.000Z", revenue: 29992, payment_count: 8 }]
-// Single total-per-day — no plan breakdown. One Bar, dataKey="revenue".
+// API shape (shape-B): [{ date, plan_type, revenue, payment_count }]
+// Multiple rows per date, one per plan_type. Pivoted into stacked bars.
+// Also handles shape-A (single total per day) gracefully as a fallback.
+
+function normaliseRevenue(rawRows) {
+  // Pivot shape-B rows into { date, monthly, quarterly, annual }
+  const map = {}
+  for (const r of safeArray(rawRows)) {
+    const rawDate = r.date
+      ? (typeof r.date === 'string' ? r.date.slice(0, 10) : String(r.date).slice(0, 10))
+      : ''
+    if (!rawDate) continue
+    if (!map[rawDate]) map[rawDate] = { _rawDate: rawDate, monthly: 0, quarterly: 0, annual: 0 }
+    const pt = r.plan_type
+    if (pt === 'monthly' || pt === 'quarterly' || pt === 'annual') {
+      map[rawDate][pt] = safeNum(r.revenue)
+    } else {
+      // shape-A fallback: single total in 'monthly' slot so something renders
+      map[rawDate].monthly += safeNum(r.revenue)
+    }
+  }
+  return Object.values(map)
+    .sort((a, b) => a._rawDate.localeCompare(b._rawDate))
+    .map((r) => {
+      let label
+      try {
+        label = new Date(r._rawDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+      } catch {
+        label = r._rawDate
+      }
+      return { date: label, monthly: r.monthly, quarterly: r.quarterly, annual: r.annual }
+    })
+}
 
 function RevenueChart({ revenueData }) {
-  const data = useMemo(() => {
-    const rows = safeArray(revenueData)
-    return rows.map((r) => ({
-      revenue:       safeNum(r.revenue),
-      payment_count: safeNum(r.payment_count),
-      date: r.date
-        ? (() => {
-            try {
-              return new Date(r.date).toLocaleDateString('en-IN', {
-                month: 'short',
-                day:   'numeric',
-              })
-            } catch {
-              return String(r.date).slice(0, 10)
-            }
-          })()
-        : '',
-    }))
-  }, [revenueData])
+  const data = useMemo(() => normaliseRevenue(revenueData), [revenueData])
 
   React.useEffect(() => {
     console.log('[RevenueChart] data items:', data.length, '| sample:', data[0])
@@ -179,20 +192,29 @@ function RevenueChart({ revenueData }) {
             itemStyle={{ fontSize: 12 }}
             formatter={(v, name) => [
               `₹${Number(v).toLocaleString('en-IN')}`,
-              name === 'revenue' ? 'Revenue' : name,
+              name.charAt(0).toUpperCase() + name.slice(1),
             ]}
           />
-          {/* Single bar — total revenue per day. isAnimationActive=false to avoid
+          {/* Stacked bars — one per plan type. isAnimationActive=false to avoid
               Recharts rAF callbacks crashing outside React's render cycle. */}
-          <Bar
-            dataKey="revenue"
-            fill="#2dd4bf"
-            name="Revenue"
-            radius={[3, 3, 0, 0]}
-            isAnimationActive={false}
-          />
+          <Bar dataKey="monthly"   stackId="rev" fill={PLAN_COLORS.monthly}   name="monthly"   isAnimationActive={false} />
+          <Bar dataKey="quarterly" stackId="rev" fill={PLAN_COLORS.quarterly} name="quarterly" isAnimationActive={false} />
+          <Bar dataKey="annual"    stackId="rev" fill={PLAN_COLORS.annual}    name="annual"    isAnimationActive={false} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
+      {/* Manual legend — Recharts Legend component is avoided (v2.x bug with filter) */}
+      <div className="flex gap-4 mt-2 justify-end">
+        {[
+          { key: 'monthly',   label: 'Monthly',   color: PLAN_COLORS.monthly },
+          { key: 'quarterly', label: 'Quarterly', color: PLAN_COLORS.quarterly },
+          { key: 'annual',    label: 'Annual',    color: PLAN_COLORS.annual },
+        ].map((l) => (
+          <div key={l.key} className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: l.color }} />
+            <span className="text-xs text-slate-400">{l.label}</span>
+          </div>
+        ))}
+      </div>
     </ChartErrorBoundary>
   )
 }

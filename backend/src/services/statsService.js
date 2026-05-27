@@ -166,17 +166,18 @@ async function getGymAnalytics(gymId, dateRange) {
       [gymId]
     ),
 
-    // Revenue trend — idx_payments_gym_date covers the filter
+    // Revenue trend by plan type — idx_payments_gym_date covers the filter
     pool.query(
       `SELECT
          DATE_TRUNC('day', paid_at)::date AS date,
+         plan_type,
          SUM(amount)::float               AS revenue,
          COUNT(*)::int                    AS payment_count
        FROM payments
        WHERE gym_id = $1
          AND paid_at >= NOW() - ($2 || ' days')::interval
-       GROUP BY DATE_TRUNC('day', paid_at)
-       ORDER BY date`,
+       GROUP BY DATE_TRUNC('day', paid_at), plan_type
+       ORDER BY date, plan_type`,
       [gymId, days]
     ),
 

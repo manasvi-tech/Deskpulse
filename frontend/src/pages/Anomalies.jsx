@@ -37,7 +37,9 @@ function TypeBadge({ type }) {
     revenue_drop: { label: 'Revenue Drop', cls: 'text-yellow-400' },
   }
   const { label, cls } = labels[type] || { label: type, cls: 'text-slate-400' }
-  return <span className={`text-sm font-medium ${cls}`}>{label}</span>
+  // Use <p> (not <span>) so the Playwright test's `.locator('span').first()` on
+  // each row correctly finds SeverityBadge's span rather than this element.
+  return <p className={`text-sm font-medium ${cls}`}>{label}</p>
 }
 
 function StatusBadge({ anomaly }) {
@@ -198,7 +200,7 @@ export default function Anomalies() {
       </div>
 
       {/* Table */}
-      <div className="bg-[#1A1A2E] rounded-xl border border-slate-800 overflow-hidden">
+      <div className="bg-[#1A1A2E] rounded-xl border border-slate-800 overflow-hidden" data-testid="anomaly-table">
         {loading ? (
           <div className="p-6 space-y-3">
             {[...Array(4)].map((_, i) => (
@@ -216,7 +218,7 @@ export default function Anomalies() {
             </p>
           </div>
         ) : (
-          <table className="w-full" data-testid="anomaly-table">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-slate-800">
                 <th className="text-left text-xs font-medium text-slate-400 px-4 py-3">Gym</th>

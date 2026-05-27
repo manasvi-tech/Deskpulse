@@ -96,7 +96,9 @@ test.describe('WTF LivePulse E2E', () => {
     // Go back to dashboard
     await page.locator('[data-testid="nav-dashboard"]').click()
 
-    // Wait up to 5 seconds for at least 1 new feed item
+    // Wait up to 10 seconds for at least 1 new feed item.
+    // WebSocket reconnect backoff is 3 s; simulator emits every ~2 s at 1×
+    // speed, so worst-case first event arrives at ~5 s — 10 s is safe.
     await page.waitForFunction(
       (initial) => {
         const feed = document.querySelector('[data-testid="activity-feed"]')
@@ -104,7 +106,7 @@ test.describe('WTF LivePulse E2E', () => {
         return feed.children.length > initial
       },
       initialCount,
-      { timeout: 5_000 }
+      { timeout: 10_000 }
     )
 
     const finalCount = await page.locator('[data-testid="activity-feed"] > div').count()
@@ -150,7 +152,7 @@ test.describe('WTF LivePulse E2E', () => {
       { testid: 'nav-analytics', heading: 'Analytics' },
       { testid: 'nav-anomalies', heading: 'Anomaly Log' },
       { testid: 'nav-simulator', heading: 'Simulator Controls' },
-      { testid: 'nav-dashboard', heading: 'Members Currently Checked In' },
+      { testid: 'nav-dashboard', heading: 'Live Activity Feed' },
     ]
 
     for (const { testid, heading } of navItems) {

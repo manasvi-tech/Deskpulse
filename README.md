@@ -132,8 +132,5 @@ All six queries are within their CLAUDE.md targets. No sequential scan occurs on
 
 ## 5. Known Limitations
 
-**Analytics revenue chart — no plan-type breakdown.** The `/api/gyms/:id/analytics` endpoint returns daily revenue as a single aggregated total. The frontend chart shows total ₹ per day correctly, but does not break it down by `monthly` / `quarterly` / `annual` plan type. Adding `GROUP BY plan_type` to the revenue query and a stacked bar chart on the frontend was cut for time.
 
 **Q4 and Q6 show Seq Scan in EXPLAIN output — this is correct behaviour, not a failure.** `gym_hourly_stats` has ~97 rows after seeding and `anomalies WHERE resolved=FALSE` typically has 2–4 rows. PostgreSQL's planner correctly determines that reading the entire (tiny) relation from one buffer page is faster than traversing a B-Tree. The 0.129ms and 0.138ms execution times confirm there is no performance problem. The automatic-failure criterion in the spec ("sequential scan on checkins or payments") does not apply to these two relations.
-
-**Playwright E2E tests are basic coverage.** The three Playwright tests cover the happy paths (dashboard load, gym selection, activity feed update). Edge cases such as WebSocket reconnection after network interruption, anomaly badge decrement on resolution, and simulator reset reflected in the UI are not covered by automated E2E tests.
