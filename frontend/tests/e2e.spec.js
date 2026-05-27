@@ -79,12 +79,15 @@ test.describe('WTF LivePulse E2E', () => {
       await page.waitForTimeout(1000)
     }
 
-    // Go back to dashboard to watch feed
+    // Go back to dashboard and snapshot the current feed HTML.
+    // We diff innerHTML (not children.length) because:
+    //   • An empty feed renders an empty-state <div> + a bottomRef <div> = 2 children.
+    //   • After the FIRST event the empty-state div is replaced 1-for-1, so
+    //     children.length stays at 2 — the count never increases until event #2.
+    //   • innerHTML changes the moment any single event arrives.
     await page.locator('[data-testid="nav-dashboard"]').click()
     await expect(page.locator('[data-testid="activity-feed"]')).toBeVisible()
-
-    // Count existing feed items
-    const initialCount = await page.locator('[data-testid="activity-feed"] > div').count()
+    const feedSnapshot = await page.locator('[data-testid="activity-feed"]').innerHTML()
 
     // Start simulator
     await page.locator('[data-testid="nav-simulator"]').click()
@@ -96,21 +99,21 @@ test.describe('WTF LivePulse E2E', () => {
     // Go back to dashboard
     await page.locator('[data-testid="nav-dashboard"]').click()
 
-    // Wait up to 10 seconds for at least 1 new feed item.
-    // WebSocket reconnect backoff is 3 s; simulator emits every ~2 s at 1×
-    // speed, so worst-case first event arrives at ~5 s — 10 s is safe.
+    // Wait up to 15 s for the feed content to change.
+    // 15 s covers: tick interval 2 s × worst-case empty ticks at low-activity
+    // hours (~39 % chance per tick). P(0 events in 7 ticks) < 0.2 %.
     await page.waitForFunction(
-      (initial) => {
+      (snapshot) => {
         const feed = document.querySelector('[data-testid="activity-feed"]')
         if (!feed) return false
-        return feed.children.length > initial
+        return feed.innerHTML !== snapshot
       },
-      initialCount,
-      { timeout: 10_000 }
+      feedSnapshot,
+      { timeout: 15_000 }
     )
 
-    const finalCount = await page.locator('[data-testid="activity-feed"] > div').count()
-    expect(finalCount).toBeGreaterThan(initialCount)
+    // Feed must still be visible — no crash
+    await expect(page.locator('[data-testid="activity-feed"]')).toBeVisible()
 
     // Stop simulator
     await page.locator('[data-testid="nav-simulator"]').click()
