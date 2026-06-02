@@ -6,14 +6,14 @@ const express = require('express');
 const router  = express.Router();
 const stats   = require('../services/statsService');
 
-// GET /api/analytics/cross-gym — revenue comparison for all gyms, last 30 days (< 2ms)
-router.get('/cross-gym', async (req, res) => {
+// GET /api/analytics/cross-location — revenue comparison, all locations, last 30 days (< 2ms)
+router.get('/cross-location', async (req, res) => {
   try {
-    const gyms = await stats.getCrossGymRevenue();
-    res.json({ gyms });
+    const locations = await stats.getCrossLocationRevenue();
+    res.json({ locations });
   } catch (err) {
-    console.error('[analytics] GET /cross-gym error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch cross-gym analytics' });
+    console.error('[analytics] GET /cross-location error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch cross-location analytics' });
   }
 });
 

@@ -5,7 +5,7 @@
  * On startup it fires immediately so anomalies are visible within seconds
  * of `docker compose up`.
  *
- * Also schedules the gym_hourly_stats materialized view refresh (every 15 min).
+ * Also schedules the location_hourly_stats materialized view refresh (every 15 min).
  */
 
 const cron                   = require('node-cron');
@@ -52,15 +52,15 @@ function scheduleMVRefresh() {
   mvTask = cron.schedule('*/15 * * * *', async () => {
     try {
       await pool.query(
-        'REFRESH MATERIALIZED VIEW CONCURRENTLY gym_hourly_stats'
+        'REFRESH MATERIALIZED VIEW CONCURRENTLY location_hourly_stats'
       );
-      console.log('[mv] gym_hourly_stats refreshed');
+      console.log('[mv] location_hourly_stats refreshed');
     } catch (err) {
       console.error('[mv] Refresh error:', err.message);
     }
   });
 
-  console.log('[mv] gym_hourly_stats refresh scheduled — every 15 minutes');
+  console.log('[mv] location_hourly_stats refresh scheduled — every 15 minutes');
 }
 
 module.exports = { startAnomalyDetector, stopAnomalyDetector, scheduleMVRefresh };

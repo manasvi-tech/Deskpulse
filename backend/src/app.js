@@ -12,7 +12,7 @@ const http    = require('http');
 const pool = require('./db/pool');
 
 // ── Route imports ────────────────────────────────────────────────────────────
-const gymsRouter      = require('./routes/gyms');
+const locationsRouter = require('./routes/locations');
 const anomaliesRouter = require('./routes/anomalies');
 const analyticsRouter = require('./routes/analytics');
 const simulatorRouter = require('./routes/simulator');
@@ -40,7 +40,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // ── API routes ───────────────────────────────────────────────────────────────
-app.use('/api/gyms',      gymsRouter);
+app.use('/api/locations', locationsRouter);
 app.use('/api/anomalies', anomaliesRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/simulator', simulatorRouter);
@@ -60,11 +60,11 @@ app.use((err, req, res, _next) => {
 async function start() {
   // Verify DB connectivity and seed status
   try {
-    const { rows } = await pool.query('SELECT COUNT(*)::int AS cnt FROM gyms');
+    const { rows } = await pool.query('SELECT COUNT(*)::int AS cnt FROM locations');
     if (rows[0].cnt === 0) {
-      console.log('[app] No gyms found — seed should have run via docker-entrypoint-initdb.d');
+      console.log('[app] No locations found — seed should have run via docker-entrypoint-initdb.d');
     } else {
-      console.log(`[app] Database ready: ${rows[0].cnt} gyms loaded`);
+      console.log(`[app] Database ready: ${rows[0].cnt} locations loaded`);
     }
   } catch (err) {
     console.error('[app] DB check failed:', err.message);

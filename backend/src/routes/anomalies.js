@@ -8,10 +8,10 @@ const stats   = require('../services/statsService');
 
 const VALID_SEVERITIES = ['warning', 'critical'];
 
-// GET /api/anomalies?gym_id=<uuid>&severity=warning|critical
+// GET /api/anomalies?location_id=<uuid>&severity=warning|critical
 router.get('/', async (req, res) => {
   try {
-    const { gym_id, severity } = req.query;
+    const { location_id, severity } = req.query;
 
     if (severity && !VALID_SEVERITIES.includes(severity)) {
       return res.status(400).json({
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    const anomalies = await stats.getActiveAnomalies({ gymId: gym_id, severity });
+    const anomalies = await stats.getActiveAnomalies({ locationId: location_id, severity });
     res.json({ anomalies });
   } catch (err) {
     console.error('[anomalies] GET / error:', err.message);
