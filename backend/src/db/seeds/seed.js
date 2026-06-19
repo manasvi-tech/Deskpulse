@@ -36,16 +36,16 @@ const LAST = [
 
 // ── Location definitions ──────────────────────────────────────────────────────
 const LOCS = [
-  { key:'awfis_kora',     name:'Awfis — Koramangala',             city:'Bengaluru', address:'Koramangala, Bengaluru',          opens:'08:00', closes:'22:00', hot:60, ded:30, priv:8,  mtg:4, count:180 },
-  { key:'awfis_indir',    name:'Awfis — Indiranagar',             city:'Bengaluru', address:'Indiranagar, Bengaluru',          opens:'08:00', closes:'22:00', hot:45, ded:20, priv:6,  mtg:3, count:140 },
-  { key:'cowrks_bandra',  name:'CoWrks — Bandra West',            city:'Mumbai',    address:'Bandra West, Mumbai',             opens:'07:00', closes:'23:00', hot:80, ded:40, priv:12, mtg:6, count:220 },
-  { key:'cowrks_powai',   name:'CoWrks — Powai',                  city:'Mumbai',    address:'Powai, Mumbai',                   opens:'07:30', closes:'22:30', hot:65, ded:30, priv:10, mtg:4, count:180 },
-  { key:'innov8_cp',      name:'Innov8 — Connaught Place',        city:'New Delhi', address:'Connaught Place, New Delhi',      opens:'08:00', closes:'22:00', hot:55, ded:25, priv:8,  mtg:4, count:160 },
-  { key:'innov8_lajpat',  name:'Innov8 — Lajpat Nagar',           city:'New Delhi', address:'Lajpat Nagar, New Delhi',         opens:'08:00', closes:'21:30', hot:40, ded:20, priv:6,  mtg:3, count:120 },
-  { key:'spring_banjara', name:'91Springboard — Banjara Hills',   city:'Hyderabad', address:'Banjara Hills, Hyderabad',        opens:'08:00', closes:'22:00', hot:50, ded:25, priv:8,  mtg:3, count:150 },
-  { key:'spring_noida',   name:'91Springboard — Sector 18 Noida', city:'Noida',     address:'Sector 18, Noida',                opens:'08:00', closes:'21:30', hot:35, ded:15, priv:5,  mtg:2, count:110 },
-  { key:'bhive_salt',     name:'BHive — Salt Lake',               city:'Kolkata',   address:'Salt Lake, Kolkata',              opens:'08:00', closes:'21:00', hot:30, ded:12, priv:4,  mtg:2, count:130 },
-  { key:'bhive_vel',      name:'BHIVE — Velachery',               city:'Chennai',   address:'Velachery, Chennai',              opens:'08:00', closes:'21:00', hot:25, ded:10, priv:3,  mtg:2, count:110 },
+  { key:'awfis_kora',     name:'Awfis - Koramangala',             city:'Bengaluru', address:'Koramangala, Bengaluru',          opens:'08:00', closes:'22:00', hot:60, ded:30, priv:8,  mtg:4, count:180 },
+  { key:'awfis_indir',    name:'Awfis - Indiranagar',             city:'Bengaluru', address:'Indiranagar, Bengaluru',          opens:'08:00', closes:'22:00', hot:45, ded:20, priv:6,  mtg:3, count:140 },
+  { key:'cowrks_bandra',  name:'CoWrks - Bandra West',            city:'Mumbai',    address:'Bandra West, Mumbai',             opens:'07:00', closes:'23:00', hot:80, ded:40, priv:12, mtg:6, count:220 },
+  { key:'cowrks_powai',   name:'CoWrks - Powai',                  city:'Mumbai',    address:'Powai, Mumbai',                   opens:'07:30', closes:'22:30', hot:65, ded:30, priv:10, mtg:4, count:180 },
+  { key:'innov8_cp',      name:'Innov8 - Connaught Place',        city:'New Delhi', address:'Connaught Place, New Delhi',      opens:'08:00', closes:'22:00', hot:55, ded:25, priv:8,  mtg:4, count:160 },
+  { key:'innov8_lajpat',  name:'Innov8 - Lajpat Nagar',           city:'New Delhi', address:'Lajpat Nagar, New Delhi',         opens:'08:00', closes:'21:30', hot:40, ded:20, priv:6,  mtg:3, count:120 },
+  { key:'spring_banjara', name:'91Springboard - Banjara Hills',   city:'Hyderabad', address:'Banjara Hills, Hyderabad',        opens:'08:00', closes:'22:00', hot:50, ded:25, priv:8,  mtg:3, count:150 },
+  { key:'spring_noida',   name:'91Springboard - Sector 18 Noida', city:'Noida',     address:'Sector 18, Noida',                opens:'08:00', closes:'21:30', hot:35, ded:15, priv:5,  mtg:2, count:110 },
+  { key:'bhive_salt',     name:'BHive - Salt Lake',               city:'Kolkata',   address:'Salt Lake, Kolkata',              opens:'08:00', closes:'21:00', hot:30, ded:12, priv:4,  mtg:2, count:130 },
+  { key:'bhive_vel',      name:'BHIVE - Velachery',               city:'Chennai',   address:'Velachery, Chennai',              opens:'08:00', closes:'21:00', hot:25, ded:10, priv:3,  mtg:2, count:110 },
 ];
 
 // ── Company definitions ───────────────────────────────────────────────────────
@@ -599,7 +599,7 @@ async function seed() {
       }
     }
 
-    // Scenario D — high_no_show (91Springboard Sector 18 Noida)
+    // Scenario D - high_no_show (91Springboard Sector 18 Noida)
     // 15 bookings today: 10 no_show + 5 confirmed = 66.7% no_show rate > 30% threshold
     {
       const noidaId = locMap['spring_noida'].id;
@@ -637,7 +637,11 @@ async function seed() {
     );
     console.log(`[seed] Seeding bookings... done (${bookingRows.length})`);
 
-    console.log('[seed] ✔ All done — 10 locations, 1500 members, ~80k check-ins, bookings and anomaly scenarios seeded.');
+    // ── 10. USERS ─────────────────────────────────────────────────────────────
+    const { seedUsers } = require('./seedUsers');
+    await seedUsers(pool);
+
+    console.log('[seed] ✔ All done — 10 locations, 1500 members, ~80k check-ins, bookings, anomaly scenarios, and users seeded.');
 
   } finally {
     await pool.end();

@@ -324,6 +324,152 @@ Three services only: db (postgres:15-alpine), backend (Node 20), frontend (React
 
 ---
 
+## Authentication & RBAC
+
+### Users Table
+Separate from members table. A user is a staff account. A member is a customer. Never mix these.
+
+**users** — id (UUID PK), email (TEXT UNIQUE), password_hash (TEXT), role (TEXT CHECK IN ('super_admin','frontdesk')), location_id (UUID nullable FK → locations — NULL for super_admin, required for frontdesk), name (TEXT), is_active (BOOLEAN DEFAULT TRUE), created_at (TIMESTAMPTZ), updated_at (TIMESTAMPTZ)
+
+### Roles and Access
+
+| Feature | Super Admin | Frontdesk |
+|---|---|---|
+| All locations dashboard | ✅ | ❌ |
+| Their location only | ✅ | ✅ |
+| Switch between locations | ✅ | ❌ locked to their location |
+| Analytics | ✅ all locations | ✅ their location only |
+| Anomalies | ✅ all locations | ✅ their location only |
+| Register new member | ✅ | ✅ their location only |
+| Delete/deactivate member | ✅ | ✅ their location only |
+| Simulator | ✅ | ❌ |
+| User management page | ✅ | ❌ |
+| Revenue data | ✅ | ✅ their location only |
+| Cross-location comparison | ✅ | ❌ |
+
+### Auth Implementation
+- httpOnly cookie — no localStorage for tokens
+- JWT stored in httpOnly cookie, signed with JWT_SECRET
+- Cookie expiry: 3 days (JWT_EXPIRY=3d)
+- Password hashing: bcryptjs with saltRounds=12
+- All protected routes require valid JWT cookie
+- Frontdesk routes additionally check location_id matches their assigned location
+
+### Middleware
+- `authMiddleware` — verifies JWT cookie, attaches user to req.user
+- `requireRole(role)` — checks req.user.role matches required role
+- `requireLocation` — for frontdesk, ensures they only access their own location_id data
+
+### New API Endpoints
+
+```
+POST   /api/auth/login    — { email, password } → httpOnly cookie + { user: { id, name, role, location_id } }
+POST   /api/auth/logout   — clears httpOnly cookie
+GET    /api/auth/me       — returns current user from cookie
+
+GET    /api/users         — list all staff accounts (super_admin only)
+POST   /api/users         — create staff account { name, email, password, role, location_id } (super_admin only)
+PATCH  /api/users/:id     — update staff account name/role/location_id/is_active (super_admin only)
+DELETE /api/users/:id     — soft delete, sets is_active=false (super_admin only)
+
+POST   /api/members       — register new member { name, email, phone, plan_type, location_id }
+PATCH  /api/members/:id   — update member status
+DELETE /api/members/:id   — soft delete: status=inactive, cascades memberships to cancelled
+```
+
+### Demo Mode
+Controlled by `DEMO_MODE=true` environment variable.
+
+When `DEMO_MODE=true`:
+- All write operations (POST/PATCH/DELETE except login/logout) return `403` with `{ demo: true, message: "Not allowed in demo mode" }`
+- Frontend checks `VITE_DEMO_MODE=true` and shows "Not allowed. Demo purposes only." modal instead of executing write actions
+- Read operations work normally
+- Simulator start/stop/reset is allowed even in demo mode
+- Anomaly dismiss is allowed even in demo mode
+
+### Seeded Users (auto-seeded on docker compose up)
+
+**Super Admin**
+- name: Arjun Mehta
+- email: admin@deskpulse.io
+- password: demo1234
+- role: super_admin
+- location_id: NULL
+
+**Frontdesk staff (one per location) — all password: demo1234**
+
+| Name | Email | Location |
+|---|---|---|
+| Priya Sharma | staff.koramangala@deskpulse.io | Awfis — Koramangala |
+| Rahul Verma | staff.indiranagar@deskpulse.io | Awfis — Indiranagar |
+| Neha Patel | staff.bandrawest@deskpulse.io | CoWrks — Bandra West |
+| Vikram Singh | staff.powai@deskpulse.io | CoWrks — Powai |
+| Ananya Krishnan | staff.connaughtplace@deskpulse.io | Innov8 — Connaught Place |
+| Rohan Gupta | staff.lajpatnagar@deskpulse.io | Innov8 — Lajpat Nagar |
+| Sneha Reddy | staff.banjarahills@deskpulse.io | 91Springboard — Banjara Hills |
+| Amit Joshi | staff.noida@deskpulse.io | 91Springboard — Sector 18 Noida |
+| Kavya Nair | staff.saltlake@deskpulse.io | BHive — Salt Lake |
+| Deepak Iyer | staff.velachery@deskpulse.io | BHIVE — Velachery |
+
+All passwords hashed with bcrypt, saltRounds=12.
+
+### New Environment Variables
+
+```
+DEMO_MODE=true
+SESSION_SECRET=deskpulse_dev_secret_change_in_production
+JWT_SECRET=deskpulse_jwt_secret_change_in_production
+JWT_EXPIRY=3d
+VITE_DEMO_MODE=true
+```
+
+### New Indexes
+
+```sql
+CREATE INDEX idx_users_email    ON users (email);
+CREATE INDEX idx_users_location ON users (location_id) WHERE role = 'frontdesk';
+CREATE INDEX idx_users_role     ON users (role);
+```
+
+### Frontend Auth Pages
+
+**Login page (`/login`)**
+- Clean centered card on light background
+- DeskPulse logo at top
+- Email + password fields
+- Login button (sky-500)
+- Demo credentials shown below form in a subtle info box:
+  - Super Admin: admin@deskpulse.io / demo1234
+  - Frontdesk (Bandra West): staff.bandrawest@deskpulse.io / demo1234
+- On successful login redirect to dashboard
+- On error show inline error message
+
+**Demo banner**
+- Shown at top of every page after login
+- Light amber background, subtle
+- Text: "You are viewing a live demo. Write operations are disabled."
+- Not dismissable
+
+**Demo modal (shown when write action attempted)**
+- Small centered modal
+- Icon: 🔒
+- Title: "Not Available in Demo"
+- Body: "This action is disabled in the demo environment. In production, you would be able to [action description]."
+- Single button: "Got it"
+
+**User Management page (super_admin only, 5th nav item)**
+- Table of all staff accounts: Name, Email, Role, Location, Status, Actions
+- Create new staff button (disabled in demo)
+- Deactivate button per row (disabled in demo)
+- Not visible in frontdesk nav at all
+
+**Member Registration (both roles)**
+- Modal or slide-over panel
+- Fields: Full Name, Email, Phone, Plan Type (dropdown), Start Date
+- Submit button (disabled in demo — shows modal instead)
+
+---
+
 ## Seed Data Specification (reviewers verify these exact values)
 
 ### 10 Locations — Exact Values (do not invent different locations)
@@ -543,3 +689,9 @@ Always run as: `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)` — execution time must
 - No manual steps required after `docker compose up`
 - No sequential scans on checkins or payments tables
 - No hardcoded database credentials in source code
+- Never store JWT in localStorage — httpOnly cookie only
+- Never expose password_hash in any API response
+- Never allow frontdesk to access another location's data
+- Never allow self-registration — all user accounts created by super_admin only
+- Never hard-delete members — always soft delete (status=inactive)
+- Never hard-delete users — always soft delete (is_active=false)

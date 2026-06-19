@@ -26,13 +26,13 @@ export class ChartErrorBoundary extends React.Component {
       return (
         <div className="flex flex-col items-center justify-center h-full min-h-[120px] gap-2 text-center">
           <span className="text-2xl">📊</span>
-          <p className="text-slate-400 text-sm font-medium">Chart unavailable</p>
-          <p className="text-slate-600 text-xs max-w-xs">
+          <p className="text-slate-500 text-sm font-medium">Chart unavailable</p>
+          <p className="text-slate-400 text-xs max-w-xs">
             {this.state.error.message || 'Could not render chart with current data'}
           </p>
           <button
             onClick={() => this.setState({ error: null })}
-            className="mt-1 text-xs text-teal-400 hover:text-teal-300 underline"
+            className="mt-1 text-xs text-sky-600 hover:text-sky-700 underline"
           >
             Retry
           </button>

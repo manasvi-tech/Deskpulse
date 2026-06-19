@@ -15,7 +15,6 @@ import { useAnomalies } from './hooks/useAnomalies'
 function App() {
   const [activePage, setActivePage] = useState('dashboard')
 
-  // Bootstrap data + WebSocket on mount
   useWebSocket()
   useLocationData()
   useAnomalies()
@@ -29,7 +28,7 @@ function App() {
 
   return (
     <div
-      className="min-h-screen bg-[#0D0D1A] text-slate-200"
+      className="min-h-screen bg-slate-50 text-slate-900"
       style={{ minWidth: '1280px' }}
     >
       <NavBar activePage={activePage} setActivePage={setActivePage} />

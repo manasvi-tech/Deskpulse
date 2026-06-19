@@ -27,12 +27,12 @@ test.describe('WTF LivePulse E2E', () => {
     const pageText = await page.locator('body').innerText()
     expect(pageText).not.toContain('undefined')
 
-    // No white backgrounds (dark theme check — body must not have white bg)
+    // Light theme check — body must have light background
     const bgColor = await page.evaluate(() =>
       window.getComputedStyle(document.body).backgroundColor
     )
-    // Should be dark (#0D0D1A = rgb(13, 13, 26))
-    expect(bgColor).toBe('rgb(13, 13, 26)')
+    // Light theme: bg-slate-50 = rgb(248, 250, 252)
+    expect(bgColor).toBe('rgb(248, 250, 252)')
   })
 
   // ── Test 2: Switching gym updates the occupancy panel ───────────────────

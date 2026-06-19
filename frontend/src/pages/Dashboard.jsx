@@ -6,16 +6,16 @@ import { useCountUp } from '../hooks/useCountUp'
 
 function occupancyColor(pct) {
   if (pct == null) return 'text-slate-400'
-  if (pct < 60) return 'text-green-400'
-  if (pct <= 85) return 'text-yellow-400'
-  return 'text-red-400'
+  if (pct < 60) return 'text-green-600'
+  if (pct <= 85) return 'text-amber-600'
+  return 'text-red-600'
 }
 
 function occupancyBarColor(pct) {
-  if (pct == null) return 'bg-slate-600'
-  if (pct < 60) return 'bg-green-400'
-  if (pct <= 85) return 'bg-yellow-400'
-  return 'bg-red-400'
+  if (pct == null) return 'bg-slate-300'
+  if (pct < 60) return 'bg-green-500'
+  if (pct <= 85) return 'bg-amber-500'
+  return 'bg-red-500'
 }
 
 function fmtTime(ts) {
@@ -31,29 +31,29 @@ function fmtTime(ts) {
 
 function SkeletonKpi() {
   return (
-    <div className="animate-pulse bg-[#1A1A2E] rounded-xl p-5 border border-slate-800 flex flex-col gap-3">
-      <div className="bg-slate-700 rounded h-4 w-24" />
-      <div className="bg-slate-700 rounded h-10 w-36" />
-      <div className="bg-slate-700 rounded h-3 w-20" />
+    <div className="animate-pulse bg-white rounded-xl p-5 border border-slate-200 flex flex-col gap-3">
+      <div className="bg-slate-200 rounded h-4 w-24" />
+      <div className="bg-slate-200 rounded h-10 w-36" />
+      <div className="bg-slate-200 rounded h-3 w-20" />
     </div>
   )
 }
 
-function KpiCard({ label, value, sub, colorClass = 'text-slate-200' }) {
+function KpiCard({ label, value, sub, colorClass = 'text-slate-900' }) {
   return (
-    <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
-      <p className="text-slate-400 text-sm mb-1">{label}</p>
+    <div className="bg-white rounded-xl p-5 border border-slate-200">
+      <p className="text-slate-500 text-sm mb-1">{label}</p>
       <p className={`text-4xl font-bold font-mono tabular-nums ${colorClass}`}>{value}</p>
-      {sub && <p className="text-slate-500 text-xs mt-1">{sub}</p>}
+      {sub && <p className="text-slate-400 text-xs mt-1">{sub}</p>}
     </div>
   )
 }
 
 function SummaryBar({ locations }) {
-  const totalCheckins = locations.reduce((sum, l) => sum + (l.current_occupancy || 0), 0)
-  const totalRevenue  = locations.reduce((sum, l) => sum + parseFloat(l.today_revenue || 0), 0)
-  const rawAnomalies  = useStore((s) => s.anomalies)
-  const anomalies     = Array.isArray(rawAnomalies) ? rawAnomalies : []
+  const totalCheckins      = locations.reduce((sum, l) => sum + (l.current_occupancy || 0), 0)
+  const totalRevenue       = locations.reduce((sum, l) => sum + parseFloat(l.today_revenue || 0), 0)
+  const rawAnomalies       = useStore((s) => s.anomalies)
+  const anomalies          = Array.isArray(rawAnomalies) ? rawAnomalies : []
   const activeAnomalyCount = anomalies.filter((a) => !a.resolved && !a.dismissed).length
 
   const animCheckins  = useCountUp(totalCheckins)
@@ -66,19 +66,19 @@ function SummaryBar({ locations }) {
         label="Members Currently Checked In (All Locations)"
         value={animCheckins.toLocaleString('en-IN')}
         sub="across all locations"
-        colorClass="text-teal-400"
+        colorClass="text-sky-600"
       />
       <KpiCard
         label="Total Today's Revenue (All Locations)"
         value={`₹${animRevenue.toLocaleString('en-IN')}`}
         sub="payments received today"
-        colorClass="text-teal-400"
+        colorClass="text-sky-600"
       />
       <KpiCard
         label="Active Anomalies"
         value={animAnomalies}
         sub="requiring attention"
-        colorClass={activeAnomalyCount > 0 ? 'text-red-400' : 'text-green-400'}
+        colorClass={activeAnomalyCount > 0 ? 'text-red-600' : 'text-green-600'}
       />
     </div>
   )
@@ -90,24 +90,24 @@ function OccupancyCard({ location, wsConnected }) {
   const animPct       = useCountUp(pct)
 
   return (
-    <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
+    <div className="bg-white rounded-xl p-5 border border-slate-200">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-slate-400 text-sm">Live Occupancy</p>
-          <p className="text-slate-300 text-xs mt-0.5">{location.name}</p>
+          <p className="text-slate-500 text-sm font-medium">Live Occupancy</p>
+          <p className="text-slate-700 text-xs mt-0.5">{location.name}</p>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="relative flex h-2.5 w-2.5">
             {wsConnected ? (
               <>
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
               </>
             ) : (
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
             )}
           </span>
-          <span className="text-xs text-slate-400">{wsConnected ? 'Live' : 'Offline'}</span>
+          <span className="text-xs text-slate-500">{wsConnected ? 'Live' : 'Offline'}</span>
         </div>
       </div>
 
@@ -115,21 +115,21 @@ function OccupancyCard({ location, wsConnected }) {
         <span className={`text-5xl font-bold font-mono tabular-nums ${occupancyColor(animPct)}`}>
           {animOccupancy}
         </span>
-        <span className="text-slate-500 text-lg mb-1">/ {location.capacity}</span>
+        <span className="text-slate-400 text-lg mb-1">/ {location.capacity}</span>
         <span className={`text-3xl font-bold font-mono tabular-nums ml-auto ${occupancyColor(animPct)}`}>
           {animPct}%
         </span>
       </div>
 
-      <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
+      <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
         <div
           className={`h-3 rounded-full transition-all duration-500 ${occupancyBarColor(pct)}`}
           style={{ width: `${Math.min(pct, 100)}%` }}
         />
       </div>
-      <div className="flex justify-between text-xs text-slate-500 mt-1">
+      <div className="flex justify-between text-xs text-slate-400 mt-1">
         <span>0</span>
-        <span className="text-slate-400">
+        <span className="text-slate-500">
           {pct < 60 ? '🟢 Normal' : pct <= 85 ? '🟡 Busy' : '🔴 Near Capacity'}
         </span>
         <span>{location.capacity}</span>
@@ -143,36 +143,36 @@ function RevenueCard({ location }) {
   const animRevenue = useCountUp(Math.round(revenue))
 
   return (
-    <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
-      <p className="text-slate-400 text-sm mb-1">Today's Revenue</p>
-      <p className="text-slate-300 text-xs mb-3">{location.name}</p>
-      <p className="text-4xl font-bold font-mono tabular-nums text-teal-400">
+    <div className="bg-white rounded-xl p-5 border border-slate-200">
+      <p className="text-slate-500 text-sm font-medium mb-1">Today's Revenue</p>
+      <p className="text-slate-700 text-xs mb-3">{location.name}</p>
+      <p className="text-4xl font-bold font-mono tabular-nums text-sky-600">
         ₹{animRevenue.toLocaleString('en-IN')}
       </p>
-      <p className="text-slate-500 text-xs mt-1">payments today</p>
+      <p className="text-slate-400 text-xs mt-1">payments today</p>
     </div>
   )
 }
 
 function ActivityFeedItem({ event }) {
   const icons = {
-    checkin:  { emoji: '🏢', label: 'Check-in',  color: 'text-green-400' },
-    checkout: { emoji: '👋', label: 'Check-out', color: 'text-slate-400' },
-    payment:  { emoji: '💳', label: 'Payment',   color: 'text-teal-400' },
+    checkin:  { emoji: '🏢', label: 'Check-in',  color: 'text-green-600' },
+    checkout: { emoji: '👋', label: 'Check-out', color: 'text-slate-500' },
+    payment:  { emoji: '💳', label: 'Payment',   color: 'text-sky-600' },
   }
-  const { emoji, label, color } = icons[event.kind] || { emoji: '📌', label: 'Event', color: 'text-slate-400' }
+  const { emoji, label, color } = icons[event.kind] || { emoji: '📌', label: 'Event', color: 'text-slate-500' }
 
   return (
-    <div className="flex items-start gap-3 py-2 border-b border-slate-800/60 last:border-0">
+    <div className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
       <span className="text-base shrink-0 mt-0.5">{emoji}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`text-xs font-semibold ${color}`}>{label}</span>
-          <span className="text-slate-500 text-xs">{event.locationName}</span>
+          <span className="text-slate-400 text-xs">{event.locationName}</span>
         </div>
-        <p className="text-slate-300 text-sm truncate">{event.memberName}</p>
+        <p className="text-slate-700 text-sm truncate">{event.memberName}</p>
         {event.kind === 'payment' && (
-          <p className="text-teal-400 text-xs">₹{Number(event.amount).toLocaleString('en-IN')} · {event.planType}</p>
+          <p className="text-sky-600 text-xs">₹{Number(event.amount).toLocaleString('en-IN')} · {event.planType}</p>
         )}
         {(event.kind === 'checkin' || event.kind === 'checkout') && event.occupancy != null && (
           <p className={`text-xs ${occupancyColor(event.capacityPct)}`}>
@@ -180,7 +180,7 @@ function ActivityFeedItem({ event }) {
           </p>
         )}
       </div>
-      <span className="text-slate-600 text-xs shrink-0">{fmtTime(event.timestamp)}</span>
+      <span className="text-slate-400 text-xs shrink-0">{fmtTime(event.timestamp)}</span>
     </div>
   )
 }
@@ -194,10 +194,10 @@ function ActivityFeed() {
   }, [feed])
 
   return (
-    <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800 flex flex-col h-full">
+    <div className="bg-white rounded-xl p-5 border border-slate-200 flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-slate-200 font-semibold">Live Activity Feed</h2>
-        <span className="text-slate-500 text-xs">{feed.length} events</span>
+        <h2 className="text-slate-900 font-semibold">Live Activity Feed</h2>
+        <span className="text-slate-400 text-xs">{feed.length} events</span>
       </div>
       <div
         className="flex-1 overflow-y-auto"
@@ -205,7 +205,7 @@ function ActivityFeed() {
         data-testid="activity-feed"
       >
         {feed.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-slate-600">
+          <div className="flex flex-col items-center justify-center h-32 text-slate-400">
             <p className="text-sm">No activity yet</p>
             <p className="text-xs mt-1">Start the simulator to see live events</p>
           </div>
@@ -232,11 +232,11 @@ export default function Dashboard() {
   if (locationsError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <span className="text-red-400 text-4xl">⚠️</span>
-        <p className="text-red-400 font-semibold">Failed to load location data</p>
+        <span className="text-red-500 text-4xl">⚠️</span>
+        <p className="text-red-600 font-semibold">Failed to load location data</p>
         <p className="text-slate-500 text-sm">{locationsError}</p>
         <button
-          className="mt-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded text-sm"
+          className="mt-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded text-sm"
           onClick={() => window.location.reload()}
         >
           Retry
@@ -247,7 +247,6 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Summary Bar */}
       {locationsLoading ? (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <SkeletonKpi /><SkeletonKpi /><SkeletonKpi />
@@ -256,9 +255,7 @@ export default function Dashboard() {
         <SummaryBar locations={locations} />
       )}
 
-      {/* Main grid */}
       <div className="grid grid-cols-3 gap-6">
-        {/* Left column: Occupancy + Revenue */}
         <div className="col-span-1 flex flex-col gap-6">
           {locationsLoading || !selectedLocation ? (
             <><SkeletonKpi /><SkeletonKpi /></>
@@ -270,16 +267,15 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Right columns: Activity feed + All-locations grid */}
         <div className="col-span-2 flex flex-col gap-6">
           <ActivityFeed />
 
           <div>
-            <h2 className="text-slate-200 font-semibold mb-3">All Locations</h2>
+            <h2 className="text-slate-900 font-semibold mb-3">All Locations</h2>
             {locationsLoading ? (
               <div className="grid grid-cols-5 gap-3">
                 {[...Array(10)].map((_, i) => (
-                  <div key={i} className="animate-pulse bg-[#1A1A2E] rounded-lg p-3 border border-slate-800 h-20" />
+                  <div key={i} className="animate-pulse bg-white rounded-lg p-3 border border-slate-200 h-20" />
                 ))}
               </div>
             ) : (
@@ -292,15 +288,15 @@ export default function Dashboard() {
                       onClick={() => useStore.getState().selectLocation(loc.id)}
                       className={`text-left rounded-lg p-3 border transition-colors ${
                         loc.id === selectedLocationId
-                          ? 'border-teal-500 bg-teal-500/10'
-                          : 'border-slate-800 bg-[#1A1A2E] hover:border-slate-600'
+                          ? 'border-sky-500 bg-sky-50'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <p className="text-xs text-slate-400 truncate">{loc.name}</p>
+                      <p className="text-xs text-slate-500 truncate">{loc.name}</p>
                       <p className={`text-xl font-bold font-mono tabular-nums mt-1 ${occupancyColor(pct)}`}>
                         {pct}%
                       </p>
-                      <p className="text-xs text-slate-600">
+                      <p className="text-xs text-slate-400">
                         {loc.current_occupancy || 0}/{loc.capacity}
                       </p>
                     </button>
