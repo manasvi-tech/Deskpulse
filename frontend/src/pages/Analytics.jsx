@@ -1,47 +1,34 @@
-// ⚠️ PATCH-v6 — Revenue chart now uses stacked bars broken down by plan type.
-// Backend now returns [{ date, plan_type, revenue, payment_count }] (shape-B).
-// normaliseRevenue() pivots multiple rows per date into { date, monthly, quarterly, annual }.
-// member_stats has monthly_count/quarterly_count/annual_count — no new/renewal keys.
-console.log('%c✅ ANALYTICS PATCH-v6 LOADED — stacked revenue chart by plan type', 'color:#2dd4bf;font-weight:bold;font-size:13px')
-
-import React, { useEffect, useState, useMemo } from 'react'
+﻿import React, { useEffect, useState, useMemo } from 'react'
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  CartesianGrid,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
+  PieChart, Pie, Cell, CartesianGrid,
 } from 'recharts'
 import useStore from '../store/useStore'
-import { fetchGymAnalytics, fetchCrossGym } from '../hooks/useGymData'
+import { fetchLocationAnalytics, fetchCrossLocation } from '../hooks/useLocationData'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAYS  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
 
+// Actual plan types used in the DB
 const PLAN_COLORS = {
-  monthly:   '#2dd4bf',   // teal-400
-  quarterly: '#f59e0b',   // amber-400
-  annual:    '#818cf8',   // indigo-400
+  day_pass:       '#2dd4bf',   // teal-400
+  hot_desk:       '#f59e0b',   // amber-400
+  dedicated_desk: '#818cf8',   // indigo-400
+  private_office: '#f87171',   // red-400
 }
-// Three slices: monthly / quarterly / annual
-const PIE_COLORS = ['#2dd4bf', '#f59e0b', '#818cf8']
+const PLAN_LABELS = {
+  day_pass:       'Day Pass',
+  hot_desk:       'Hot Desk',
+  dedicated_desk: 'Dedicated Desk',
+  private_office: 'Private Office',
+}
+const PLAN_KEYS = ['day_pass', 'hot_desk', 'dedicated_desk', 'private_office']
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function safeArray(v) {
-  return Array.isArray(v) ? v : []
-}
-
-function safeNum(v) {
-  const n = Number(v)
-  return isFinite(n) ? n : 0
-}
+function safeArray(v) { return Array.isArray(v) ? v : [] }
+function safeNum(v) { const n = Number(v); return isFinite(n) ? n : 0 }
 
 function SkeletonBlock({ h = 'h-48' }) {
   return <div className={`animate-pulse bg-slate-700 rounded-lg ${h}`} />
@@ -50,9 +37,7 @@ function SkeletonBlock({ h = 'h-48' }) {
 // ── Heatmap ──────────────────────────────────────────────────────────────────
 
 function HeatmapCell({ value, max }) {
-  if (!value || value === 0) {
-    return <div className="w-full h-full rounded-sm bg-slate-800" />
-  }
+  if (!value || value === 0) return <div className="w-full h-full rounded-sm bg-slate-800" />
   const opacity = 0.15 + (Math.min(value / Math.max(max, 1), 1)) * 0.85
   return (
     <div
@@ -86,9 +71,7 @@ function PeakHoursHeatmap({ heatmapData }) {
       <div className="min-w-[500px]">
         <div className="flex mb-1 ml-12">
           {DAYS.map((d) => (
-            <div key={d} className="flex-1 text-center text-xs text-slate-400 font-medium">
-              {d}
-            </div>
+            <div key={d} className="flex-1 text-center text-xs text-slate-400 font-medium">{d}</div>
           ))}
         </div>
         {HOURS.map((hr, hIdx) => (
@@ -104,11 +87,7 @@ function PeakHoursHeatmap({ heatmapData }) {
         <div className="flex items-center gap-2 mt-2 justify-end">
           <span className="text-slate-600 text-xs">Low</span>
           {[0.15, 0.3, 0.5, 0.7, 0.9].map((o) => (
-            <div
-              key={o}
-              className="w-4 h-4 rounded-sm"
-              style={{ backgroundColor: `rgba(45, 212, 191, ${o})` }}
-            />
+            <div key={o} className="w-4 h-4 rounded-sm" style={{ backgroundColor: `rgba(45, 212, 191, ${o})` }} />
           ))}
           <span className="text-slate-600 text-xs">High</span>
         </div>
@@ -118,26 +97,25 @@ function PeakHoursHeatmap({ heatmapData }) {
 }
 
 // ── Revenue Chart ─────────────────────────────────────────────────────────────
-//
-// API shape (shape-B): [{ date, plan_type, revenue, payment_count }]
-// Multiple rows per date, one per plan_type. Pivoted into stacked bars.
-// Also handles shape-A (single total per day) gracefully as a fallback.
+// Backend returns: [{ date, plan_type, revenue, payment_count }]
+// plan_type values: day_pass | hot_desk | dedicated_desk | private_office
 
 function normaliseRevenue(rawRows) {
-  // Pivot shape-B rows into { date, monthly, quarterly, annual }
   const map = {}
   for (const r of safeArray(rawRows)) {
     const rawDate = r.date
       ? (typeof r.date === 'string' ? r.date.slice(0, 10) : String(r.date).slice(0, 10))
       : ''
     if (!rawDate) continue
-    if (!map[rawDate]) map[rawDate] = { _rawDate: rawDate, monthly: 0, quarterly: 0, annual: 0 }
+    if (!map[rawDate]) {
+      map[rawDate] = { _rawDate: rawDate, day_pass: 0, hot_desk: 0, dedicated_desk: 0, private_office: 0 }
+    }
     const pt = r.plan_type
-    if (pt === 'monthly' || pt === 'quarterly' || pt === 'annual') {
+    if (PLAN_KEYS.includes(pt)) {
       map[rawDate][pt] = safeNum(r.revenue)
     } else {
-      // shape-A fallback: single total in 'monthly' slot so something renders
-      map[rawDate].monthly += safeNum(r.revenue)
+      // Fallback: add to day_pass
+      map[rawDate].day_pass += safeNum(r.revenue)
     }
   }
   return Object.values(map)
@@ -146,19 +124,13 @@ function normaliseRevenue(rawRows) {
       let label
       try {
         label = new Date(r._rawDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
-      } catch {
-        label = r._rawDate
-      }
-      return { date: label, monthly: r.monthly, quarterly: r.quarterly, annual: r.annual }
+      } catch { label = r._rawDate }
+      return { date: label, day_pass: r.day_pass, hot_desk: r.hot_desk, dedicated_desk: r.dedicated_desk, private_office: r.private_office }
     })
 }
 
 function RevenueChart({ revenueData }) {
   const data = useMemo(() => normaliseRevenue(revenueData), [revenueData])
-
-  React.useEffect(() => {
-    console.log('[RevenueChart] data items:', data.length, '| sample:', data[0])
-  }, [data])
 
   if (!data.length) {
     return (
@@ -173,45 +145,25 @@ function RevenueChart({ revenueData }) {
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 4, right: 8, bottom: 20, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis
-            dataKey="date"
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            interval="preserveStartEnd"
-            angle={-30}
-            textAnchor="end"
-            height={40}
-          />
-          <YAxis
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-            width={50}
-          />
+          <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} interval="preserveStartEnd" angle={-30} textAnchor="end" height={40} />
+          <YAxis tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} width={50} />
           <Tooltip
             contentStyle={{ background: '#1A1A2E', border: '1px solid #334155', borderRadius: 8 }}
             labelStyle={{ color: '#e2e8f0', fontSize: 12 }}
             itemStyle={{ fontSize: 12 }}
-            formatter={(v, name) => [
-              `₹${Number(v).toLocaleString('en-IN')}`,
-              name.charAt(0).toUpperCase() + name.slice(1),
-            ]}
+            formatter={(v, name) => [`₹${Number(v).toLocaleString('en-IN')}`, PLAN_LABELS[name] || name]}
           />
-          {/* Stacked bars — one per plan type. isAnimationActive=false to avoid
-              Recharts rAF callbacks crashing outside React's render cycle. */}
-          <Bar dataKey="monthly"   stackId="rev" fill={PLAN_COLORS.monthly}   name="monthly"   isAnimationActive={false} />
-          <Bar dataKey="quarterly" stackId="rev" fill={PLAN_COLORS.quarterly} name="quarterly" isAnimationActive={false} />
-          <Bar dataKey="annual"    stackId="rev" fill={PLAN_COLORS.annual}    name="annual"    isAnimationActive={false} radius={[3, 3, 0, 0]} />
+          <Bar dataKey="day_pass"       stackId="rev" fill={PLAN_COLORS.day_pass}       name="day_pass"       isAnimationActive={false} />
+          <Bar dataKey="hot_desk"       stackId="rev" fill={PLAN_COLORS.hot_desk}       name="hot_desk"       isAnimationActive={false} />
+          <Bar dataKey="dedicated_desk" stackId="rev" fill={PLAN_COLORS.dedicated_desk} name="dedicated_desk" isAnimationActive={false} />
+          <Bar dataKey="private_office" stackId="rev" fill={PLAN_COLORS.private_office} name="private_office" isAnimationActive={false} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
-      {/* Manual legend — Recharts Legend component is avoided (v2.x bug with filter) */}
-      <div className="flex gap-4 mt-2 justify-end">
-        {[
-          { key: 'monthly',   label: 'Monthly',   color: PLAN_COLORS.monthly },
-          { key: 'quarterly', label: 'Quarterly', color: PLAN_COLORS.quarterly },
-          { key: 'annual',    label: 'Annual',    color: PLAN_COLORS.annual },
-        ].map((l) => (
-          <div key={l.key} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: l.color }} />
-            <span className="text-xs text-slate-400">{l.label}</span>
+      <div className="flex gap-4 mt-2 justify-end flex-wrap">
+        {PLAN_KEYS.map((k) => (
+          <div key={k} className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: PLAN_COLORS[k] }} />
+            <span className="text-xs text-slate-400">{PLAN_LABELS[k]}</span>
           </div>
         ))}
       </div>
@@ -220,11 +172,13 @@ function RevenueChart({ revenueData }) {
 }
 
 // ── Churn Risk Panel ──────────────────────────────────────────────────────────
+// Backend returns churn_risk: { expiring_soon: [...], inactive: [...] }
 
-function ChurnPanel({ churnData }) {
-  const rows = safeArray(churnData)
+function ChurnPanel({ churnRisk }) {
+  const expiringSoon = safeArray(churnRisk?.expiring_soon)
+  const inactive     = safeArray(churnRisk?.inactive)
 
-  if (!rows.length) {
+  if (!expiringSoon.length && !inactive.length) {
     return (
       <div className="flex items-center justify-center h-24 text-slate-500 text-sm">
         No churn risk members found
@@ -232,76 +186,75 @@ function ChurnPanel({ churnData }) {
     )
   }
 
-  const sorted = [...rows].sort(
-    (a, b) => new Date(a.last_checkin_at) - new Date(b.last_checkin_at)
+  const Section = ({ title, badge, members, renderRow }) => (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-slate-300 text-sm font-medium">{title}</span>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-400">{members.length}</span>
+        {badge}
+      </div>
+      {members.length > 0 && (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-800">
+              <th className="text-left text-slate-400 text-xs font-medium pb-1">Member</th>
+              <th className="text-left text-slate-400 text-xs font-medium pb-1">Plan</th>
+              <th className="text-left text-slate-400 text-xs font-medium pb-1">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.slice(0, 8).map(renderRow)}
+          </tbody>
+        </table>
+      )}
+    </div>
   )
 
   return (
-    <div className="overflow-y-auto" style={{ maxHeight: 280 }}>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-800">
-            <th className="text-left text-slate-400 text-xs font-medium pb-2">Member</th>
-            <th className="text-left text-slate-400 text-xs font-medium pb-2">Last Check-in</th>
-            <th className="text-left text-slate-400 text-xs font-medium pb-2">Days Ago</th>
-            <th className="text-left text-slate-400 text-xs font-medium pb-2">Risk</th>
+    <div className="overflow-y-auto" style={{ maxHeight: 300 }}>
+      <Section
+        title="Expiring Soon"
+        badge={<span className="text-xs text-yellow-400 font-semibold">EXPIRING SOON</span>}
+        members={expiringSoon}
+        renderRow={(m) => (
+          <tr key={m.id} className="border-b border-slate-800/50">
+            <td className="py-1 text-slate-200 text-xs">{m.name || '—'}</td>
+            <td className="py-1 text-slate-400 text-xs capitalize">{(m.plan_type || '').replace(/_/g, ' ')}</td>
+            <td className="py-1 text-yellow-400 text-xs">
+              {m.days_until_expiry != null ? `${Math.max(0, Math.round(m.days_until_expiry))}d left` : '—'}
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {sorted.map((m) => {
-            const daysAgo = m.last_checkin_at
-              ? Math.floor((Date.now() - new Date(m.last_checkin_at).getTime()) / 86400000)
-              : 0
-            const isCritical = daysAgo >= 60
-            return (
-              <tr key={m.id} className="border-b border-slate-800/50">
-                <td className="py-1.5 text-slate-200 font-medium">{m.name || '—'}</td>
-                <td className="py-1.5 text-slate-400 text-xs">
-                  {m.last_checkin_at
-                    ? new Date(m.last_checkin_at).toLocaleDateString('en-IN')
-                    : '—'}
-                </td>
-                <td className="py-1.5 text-slate-400 text-xs">{daysAgo}d</td>
-                <td className="py-1.5">
-                  <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      isCritical
-                        ? 'bg-red-500/20 text-red-400'
-                        : 'bg-yellow-500/20 text-yellow-400'
-                    }`}
-                  >
-                    {isCritical ? 'CRITICAL' : 'HIGH'}
-                  </span>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+        )}
+      />
+      <Section
+        title="Inactive (30+ days)"
+        badge={<span className="text-xs text-slate-500 font-semibold">INACTIVE</span>}
+        members={inactive}
+        renderRow={(m) => (
+          <tr key={m.id} className="border-b border-slate-800/50">
+            <td className="py-1 text-slate-200 text-xs">{m.name || '—'}</td>
+            <td className="py-1 text-slate-400 text-xs capitalize">{(m.plan_type || '').replace(/_/g, ' ')}</td>
+            <td className="py-1 text-slate-500 text-xs">
+              {m.days_since_checkin != null ? `${Math.round(m.days_since_checkin)}d ago` : 'Never'}
+            </td>
+          </tr>
+        )}
+      />
     </div>
   )
 }
 
 // ── Plan Mix Donut ────────────────────────────────────────────────────────────
-//
-// API shape (member_stats): {
-//   total_members, active_members, inactive_members, frozen_members,
-//   monthly_count, quarterly_count, annual_count,
-//   monthly_pct, quarterly_pct, annual_pct
-// }
-// No new/renewal breakdown in the API — show plan type distribution instead.
+// Backend member_stats: { day_pass_count, hot_desk_count, dedicated_desk_count, private_office_count }
 
 function RatioDonut({ ratioData }) {
   if (!ratioData || typeof ratioData !== 'object') return <SkeletonBlock h="h-40" />
 
-  const monthly   = safeNum(ratioData.monthly_count   ?? 0)
-  const quarterly = safeNum(ratioData.quarterly_count ?? 0)
-  const annual    = safeNum(ratioData.annual_count    ?? 0)
-  const total     = monthly + quarterly + annual
-
-  React.useEffect(() => {
-    console.log('[RatioDonut] monthly:', monthly, 'quarterly:', quarterly, 'annual:', annual)
-  }, [monthly, quarterly, annual])
+  const dayPass       = safeNum(ratioData.day_pass_count       ?? 0)
+  const hotDesk       = safeNum(ratioData.hot_desk_count       ?? 0)
+  const dedicatedDesk = safeNum(ratioData.dedicated_desk_count ?? 0)
+  const privateOffice = safeNum(ratioData.private_office_count ?? 0)
+  const total         = dayPass + hotDesk + dedicatedDesk + privateOffice
 
   if (total === 0) {
     return (
@@ -312,42 +265,26 @@ function RatioDonut({ ratioData }) {
   }
 
   const pieData = [
-    { name: 'Monthly',   value: monthly,   color: PIE_COLORS[0] },
-    { name: 'Quarterly', value: quarterly, color: PIE_COLORS[1] },
-    { name: 'Annual',    value: annual,    color: PIE_COLORS[2] },
+    { name: 'Day Pass',       value: dayPass,       color: PLAN_COLORS.day_pass },
+    { name: 'Hot Desk',       value: hotDesk,       color: PLAN_COLORS.hot_desk },
+    { name: 'Dedicated Desk', value: dedicatedDesk, color: PLAN_COLORS.dedicated_desk },
+    { name: 'Private Office', value: privateOffice, color: PLAN_COLORS.private_office },
   ].filter((d) => d.value > 0)
 
   return (
     <ChartErrorBoundary>
-      {/* PieChart WITHOUT <Legend> — Recharts 2.x Legend calls .filter() on
-          uninitialised graphical items; replaced with a manual colour key. */}
       <ResponsiveContainer width="100%" height={160}>
         <PieChart>
-          <Pie
-            data={pieData}
-            cx="50%"
-            cy="50%"
-            innerRadius={45}
-            outerRadius={65}
-            paddingAngle={4}
-            dataKey="value"
-            isAnimationActive={false}
-          >
-            {pieData.map((d, i) => (
-              <Cell key={i} fill={d.color} />
-            ))}
+          <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={4} dataKey="value" isAnimationActive={false}>
+            {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
           </Pie>
           <Tooltip
             contentStyle={{ background: '#1A1A2E', border: '1px solid #334155', borderRadius: 8 }}
-            formatter={(v, name) => [
-              `${v} (${Math.round((v / total) * 100)}%)`,
-              name,
-            ]}
+            formatter={(v, name) => [`${v} (${Math.round((v / total) * 100)}%)`, name]}
             itemStyle={{ fontSize: 12 }}
           />
         </PieChart>
       </ResponsiveContainer>
-      {/* Manual legend */}
       <div className="flex flex-col gap-1.5 mt-2">
         {pieData.map((d) => (
           <div key={d.name} className="flex items-center justify-between">
@@ -357,9 +294,7 @@ function RatioDonut({ ratioData }) {
             </div>
             <span className="text-xs font-semibold" style={{ color: d.color }}>
               {d.value}
-              <span className="text-slate-600 font-normal ml-1">
-                ({Math.round((d.value / total) * 100)}%)
-              </span>
+              <span className="text-slate-600 font-normal ml-1">({Math.round((d.value / total) * 100)}%)</span>
             </span>
           </div>
         ))}
@@ -368,38 +303,25 @@ function RatioDonut({ ratioData }) {
   )
 }
 
-// ── Cross-Gym Revenue ─────────────────────────────────────────────────────────
+// ── Cross-Location Revenue ─────────────────────────────────────────────────────
 
-function CrossGymChart({ data, loading, error }) {
-  // Hooks MUST be called unconditionally — before any early returns
+function CrossLocationChart({ data, loading, error }) {
   const chartData = React.useMemo(() => {
     const rows = safeArray(data)
     if (!rows.length) return []
     return [...rows]
       .map((r) => ({
-        shortName:
-          (r.gym_name || r.name || '').replace('WTF Gyms — ', '') ||
-          r.gym_id?.slice(0, 8) ||
-          '?',
-        revenue: safeNum(r.total_revenue ?? r.revenue ?? r.sum ?? 0),
+        shortName: (r.location_name || r.name || r.gym_name || '').replace('WTF Gyms — ', '') || r.location_id?.slice(0, 8) || '?',
+        revenue:   safeNum(r.total_revenue ?? r.revenue ?? r.sum ?? 0),
       }))
       .filter((r) => r.shortName)
       .sort((a, b) => b.revenue - a.revenue)
   }, [data])
 
-  // ── Diagnostic marker ────────────────────────────────────────────────────
-  React.useEffect(() => {
-    console.log('[CrossGymChart] mounted — rows:', safeArray(data).length, '→ chartData:', chartData.length)
-  }, [data, chartData])
-
   if (loading) return <SkeletonBlock h="h-52" />
-  if (error) return <p className="text-red-400 text-sm">⚠️ {error}</p>
+  if (error)   return <p className="text-red-400 text-sm">⚠️ {error}</p>
   if (!chartData.length) {
-    return (
-      <p className="text-slate-500 text-sm flex items-center justify-center h-24">
-        No cross-gym data available
-      </p>
-    )
+    return <p className="text-slate-500 text-sm flex items-center justify-center h-24">No cross-location data available</p>
   }
 
   return (
@@ -407,17 +329,8 @@ function CrossGymChart({ data, loading, error }) {
       <ResponsiveContainer width="100%" height={Math.max(chartData.length * 28 + 20, 200)}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20, top: 4, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-          <XAxis
-            type="number"
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
-          />
-          <YAxis
-            type="category"
-            dataKey="shortName"
-            tick={{ fill: '#94a3b8', fontSize: 11 }}
-            width={110}
-          />
+          <XAxis type="number" tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+          <YAxis type="category" dataKey="shortName" tick={{ fill: '#94a3b8', fontSize: 11 }} width={130} />
           <Tooltip
             contentStyle={{ background: '#1A1A2E', border: '1px solid #334155', borderRadius: 8 }}
             formatter={(v) => [`₹${Number(v).toLocaleString('en-IN')}`, 'Revenue']}
@@ -434,63 +347,52 @@ function CrossGymChart({ data, loading, error }) {
 // ── Main Analytics Page ───────────────────────────────────────────────────────
 
 export default function Analytics() {
-  const selectedGymId = useStore((s) => s.selectedGymId)
-  const gyms = useStore((s) => s.gyms)
-  const crossGymData = useStore((s) => s.crossGymData)
-  const crossGymLoading = useStore((s) => s.crossGymLoading)
-  const crossGymError = useStore((s) => s.crossGymError)
-  const setCrossGymData = useStore((s) => s.setCrossGymData)
-  const setCrossGymLoading = useStore((s) => s.setCrossGymLoading)
-  const setCrossGymError = useStore((s) => s.setCrossGymError)
+  const selectedLocationId   = useStore((s) => s.selectedLocationId)
+  const locations             = useStore((s) => s.locations)
+  const crossLocationData     = useStore((s) => s.crossLocationData)
+  const crossLocationLoading  = useStore((s) => s.crossLocationLoading)
+  const crossLocationError    = useStore((s) => s.crossLocationError)
+  const setCrossLocationData  = useStore((s) => s.setCrossLocationData)
+  const setCrossLocationLoading = useStore((s) => s.setCrossLocationLoading)
+  const setCrossLocationError = useStore((s) => s.setCrossLocationError)
 
-  const [dateRange, setDateRange] = useState('30d')
+  const [dateRange, setDateRange]         = useState('30d')
   const [analyticsData, setAnalyticsData] = useState(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
-  const [analyticsError, setAnalyticsError] = useState(null)
+  const [analyticsError, setAnalyticsError]     = useState(null)
 
-  const selectedGym = gyms.find((g) => g.id === selectedGymId)
+  const selectedLocation = locations.find((l) => l.id === selectedLocationId)
 
-  // Fetch per-gym analytics when gym or date range changes
+  // Fetch per-location analytics when location or date range changes
   useEffect(() => {
-    if (!selectedGymId) return
+    if (!selectedLocationId) return
     let cancelled = false
     setAnalyticsLoading(true)
     setAnalyticsError(null)
     setAnalyticsData(null)
 
-    fetchGymAnalytics(selectedGymId, dateRange)
-      .then((d) => {
-        if (!cancelled) {
-          setAnalyticsData(d)
-          setAnalyticsLoading(false)
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setAnalyticsError(err.message || 'Failed to load analytics')
-          setAnalyticsLoading(false)
-        }
-      })
+    fetchLocationAnalytics(selectedLocationId, dateRange)
+      .then((d) => { if (!cancelled) { setAnalyticsData(d); setAnalyticsLoading(false) } })
+      .catch((err) => { if (!cancelled) { setAnalyticsError(err.message || 'Failed to load analytics'); setAnalyticsLoading(false) } })
 
     return () => { cancelled = true }
-  }, [selectedGymId, dateRange])
+  }, [selectedLocationId, dateRange])
 
-  // Fetch cross-gym data once (cached in store)
+  // Fetch cross-location data once (cached in store)
   useEffect(() => {
-    if (safeArray(crossGymData).length > 0 || crossGymLoading) return
-    setCrossGymLoading(true)
-    fetchCrossGym()
-      .then((d) => setCrossGymData(Array.isArray(d) ? d : safeArray(d?.data ?? d?.gyms ?? [])))
-      .catch((err) => setCrossGymError(err.message || 'Failed to load cross-gym data'))
+    if (safeArray(crossLocationData).length > 0 || crossLocationLoading) return
+    setCrossLocationLoading(true)
+    fetchCrossLocation()
+      .then((d) => setCrossLocationData(Array.isArray(d) ? d : []))
+      .catch((err) => setCrossLocationError(err.message || 'Failed to load cross-location data'))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // API returns { analytics: { heatmap, revenue_chart, churn_risk, member_stats } }
-  // Unwrap the outer envelope; fall back to root if the backend ever changes.
   const body        = analyticsData?.analytics ?? analyticsData
   const heatmapData = safeArray(body?.heatmap)
-  const revenueData = safeArray(body?.revenue_chart)   // ← was 'revenue'
-  const churnData   = safeArray(body?.churn_risk)      // ← was 'churn'
-  const ratioData   = body?.member_stats ?? null       // ← was 'ratio'
+  const revenueData = safeArray(body?.revenue_chart)
+  const churnRisk   = body?.churn_risk ?? null        // { expiring_soon: [...], inactive: [...] }
+  const ratioData   = body?.member_stats ?? null
 
   return (
     <div className="p-6 space-y-6">
@@ -498,9 +400,7 @@ export default function Analytics() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-200">Analytics</h1>
-          {selectedGym && (
-            <p className="text-slate-400 text-sm mt-0.5">{selectedGym.name}</p>
-          )}
+          {selectedLocation && <p className="text-slate-400 text-sm mt-0.5">{selectedLocation.name}</p>}
         </div>
         <div className="flex gap-2">
           {['7d', '30d', '90d'].map((r) => (
@@ -508,9 +408,7 @@ export default function Analytics() {
               key={r}
               onClick={() => setDateRange(r)}
               className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                dateRange === r
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                dateRange === r ? 'bg-teal-500 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
               }`}
             >
               {r}
@@ -525,63 +423,38 @@ export default function Analytics() {
         </div>
       )}
 
-      {/* Row 1: Heatmap + Ratio donut */}
+      {/* Row 1: Heatmap + Plan Mix */}
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
           <h2 className="text-slate-200 font-semibold mb-4">Peak Hours Heatmap (Last 7 Days)</h2>
-          {analyticsLoading ? (
-            <SkeletonBlock h="h-64" />
-          ) : (
-            <PeakHoursHeatmap heatmapData={heatmapData} />
-          )}
+          {analyticsLoading ? <SkeletonBlock h="h-64" /> : <PeakHoursHeatmap heatmapData={heatmapData} />}
         </div>
 
         <div className="col-span-1 bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
           <h2 className="text-slate-200 font-semibold mb-1">Plan Mix</h2>
-          <p className="text-slate-500 text-xs mb-3">All members at this gym</p>
-          {analyticsLoading ? (
-            <SkeletonBlock h="h-40" />
-          ) : (
-            <RatioDonut ratioData={ratioData} />
-          )}
+          <p className="text-slate-500 text-xs mb-3">Active memberships at this location</p>
+          {analyticsLoading ? <SkeletonBlock h="h-40" /> : <RatioDonut ratioData={ratioData} />}
         </div>
       </div>
 
       {/* Row 2: Revenue chart */}
       <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
         <h2 className="text-slate-200 font-semibold mb-4">Daily Revenue (₹)</h2>
-        {analyticsLoading ? (
-          <SkeletonBlock h="h-52" />
-        ) : (
-          <RevenueChart revenueData={revenueData} />
-        )}
+        {analyticsLoading ? <SkeletonBlock h="h-52" /> : <RevenueChart revenueData={revenueData} />}
       </div>
 
-      {/* Row 3: Churn Risk + Cross-gym */}
+      {/* Row 3: Churn Risk + Cross-location */}
       <div className="grid grid-cols-2 gap-6">
         <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-slate-200 font-semibold">Churn Risk Members</h2>
-            {!analyticsLoading && churnData.length > 0 && (
-              <span className="text-xs text-slate-500">{churnData.length} at risk</span>
-            )}
           </div>
-          {analyticsLoading ? (
-            <SkeletonBlock h="h-48" />
-          ) : (
-            <ChurnPanel churnData={churnData} />
-          )}
+          {analyticsLoading ? <SkeletonBlock h="h-48" /> : <ChurnPanel churnRisk={churnRisk} />}
         </div>
 
         <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
-          <h2 className="text-slate-200 font-semibold mb-3">
-            Cross-Gym Revenue (Last 30 Days)
-          </h2>
-          <CrossGymChart
-            data={crossGymData}
-            loading={crossGymLoading}
-            error={crossGymError}
-          />
+          <h2 className="text-slate-200 font-semibold mb-3">Cross-Location Revenue (Last 30 Days)</h2>
+          <CrossLocationChart data={crossLocationData} loading={crossLocationLoading} error={crossLocationError} />
         </div>
       </div>
     </div>

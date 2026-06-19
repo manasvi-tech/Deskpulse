@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react'
+﻿import React, { useEffect, useRef } from 'react'
 import useStore from '../store/useStore'
-import { useCountUp, useCountUpCurrency } from '../hooks/useCountUp'
+import { useCountUp } from '../hooks/useCountUp'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -22,14 +22,9 @@ function fmtTime(ts) {
   if (!ts) return ''
   try {
     return new Date(ts).toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
     })
-  } catch {
-    return ''
-  }
+  } catch { return '' }
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -54,28 +49,27 @@ function KpiCard({ label, value, sub, colorClass = 'text-slate-200' }) {
   )
 }
 
-function SummaryBar({ gyms }) {
-  const totalCheckins = gyms.reduce((sum, g) => sum + (g.current_occupancy || 0), 0)
-  const totalRevenue = gyms.reduce((sum, g) => sum + parseFloat(g.today_revenue || 0), 0)
-  const rawAnomalies = useStore((s) => s.anomalies)
-  // Guard: store is always [], but coerce in case API response was an object
-  const anomalies = Array.isArray(rawAnomalies) ? rawAnomalies : []
+function SummaryBar({ locations }) {
+  const totalCheckins = locations.reduce((sum, l) => sum + (l.current_occupancy || 0), 0)
+  const totalRevenue  = locations.reduce((sum, l) => sum + parseFloat(l.today_revenue || 0), 0)
+  const rawAnomalies  = useStore((s) => s.anomalies)
+  const anomalies     = Array.isArray(rawAnomalies) ? rawAnomalies : []
   const activeAnomalyCount = anomalies.filter((a) => !a.resolved && !a.dismissed).length
 
-  const animCheckins = useCountUp(totalCheckins)
-  const animRevenue = useCountUp(Math.round(totalRevenue))
+  const animCheckins  = useCountUp(totalCheckins)
+  const animRevenue   = useCountUp(Math.round(totalRevenue))
   const animAnomalies = useCountUp(activeAnomalyCount)
 
   return (
     <div className="grid grid-cols-3 gap-4 mb-6">
       <KpiCard
-        label="Members Currently Checked In (All Gyms)"
+        label="Members Currently Checked In (All Locations)"
         value={animCheckins.toLocaleString('en-IN')}
         sub="across all locations"
         colorClass="text-teal-400"
       />
       <KpiCard
-        label="Total Today's Revenue (All Gyms)"
+        label="Total Today's Revenue (All Locations)"
         value={`₹${animRevenue.toLocaleString('en-IN')}`}
         sub="payments received today"
         colorClass="text-teal-400"
@@ -90,19 +84,17 @@ function SummaryBar({ gyms }) {
   )
 }
 
-function OccupancyCard({ gym, wsConnected }) {
-  const pct = gym.capacity_pct ?? Math.round(((gym.current_occupancy || 0) / gym.capacity) * 100)
-  const animOccupancy = useCountUp(gym.current_occupancy || 0)
-  const animPct = useCountUp(pct)
+function OccupancyCard({ location, wsConnected }) {
+  const pct = location.capacity_pct ?? Math.round(((location.current_occupancy || 0) / location.capacity) * 100)
+  const animOccupancy = useCountUp(location.current_occupancy || 0)
+  const animPct       = useCountUp(pct)
 
   return (
     <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-slate-400 text-sm">Live Occupancy</p>
-          <p className="text-slate-300 text-xs mt-0.5">
-            {gym.name.replace('WTF Gyms — ', '')}
-          </p>
+          <p className="text-slate-300 text-xs mt-0.5">{location.name}</p>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="relative flex h-2.5 w-2.5">
@@ -123,13 +115,12 @@ function OccupancyCard({ gym, wsConnected }) {
         <span className={`text-5xl font-bold font-mono tabular-nums ${occupancyColor(animPct)}`}>
           {animOccupancy}
         </span>
-        <span className="text-slate-500 text-lg mb-1">/ {gym.capacity}</span>
+        <span className="text-slate-500 text-lg mb-1">/ {location.capacity}</span>
         <span className={`text-3xl font-bold font-mono tabular-nums ml-auto ${occupancyColor(animPct)}`}>
           {animPct}%
         </span>
       </div>
 
-      {/* Bar */}
       <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
         <div
           className={`h-3 rounded-full transition-all duration-500 ${occupancyBarColor(pct)}`}
@@ -141,22 +132,20 @@ function OccupancyCard({ gym, wsConnected }) {
         <span className="text-slate-400">
           {pct < 60 ? '🟢 Normal' : pct <= 85 ? '🟡 Busy' : '🔴 Near Capacity'}
         </span>
-        <span>{gym.capacity}</span>
+        <span>{location.capacity}</span>
       </div>
     </div>
   )
 }
 
-function RevenueCard({ gym }) {
-  const revenue = parseFloat(gym.today_revenue || 0)
+function RevenueCard({ location }) {
+  const revenue     = parseFloat(location.today_revenue || 0)
   const animRevenue = useCountUp(Math.round(revenue))
 
   return (
     <div className="bg-[#1A1A2E] rounded-xl p-5 border border-slate-800">
       <p className="text-slate-400 text-sm mb-1">Today's Revenue</p>
-      <p className="text-slate-300 text-xs mb-3">
-        {gym.name.replace('WTF Gyms — ', '')}
-      </p>
+      <p className="text-slate-300 text-xs mb-3">{location.name}</p>
       <p className="text-4xl font-bold font-mono tabular-nums text-teal-400">
         ₹{animRevenue.toLocaleString('en-IN')}
       </p>
@@ -167,9 +156,9 @@ function RevenueCard({ gym }) {
 
 function ActivityFeedItem({ event }) {
   const icons = {
-    checkin: { emoji: '🏋️', label: 'Check-in', color: 'text-green-400' },
+    checkin:  { emoji: '🏢', label: 'Check-in',  color: 'text-green-400' },
     checkout: { emoji: '👋', label: 'Check-out', color: 'text-slate-400' },
-    payment: { emoji: '💳', label: 'Payment', color: 'text-teal-400' },
+    payment:  { emoji: '💳', label: 'Payment',   color: 'text-teal-400' },
   }
   const { emoji, label, color } = icons[event.kind] || { emoji: '📌', label: 'Event', color: 'text-slate-400' }
 
@@ -179,7 +168,7 @@ function ActivityFeedItem({ event }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`text-xs font-semibold ${color}`}>{label}</span>
-          <span className="text-slate-500 text-xs">{event.gymName?.replace('WTF Gyms — ', '')}</span>
+          <span className="text-slate-500 text-xs">{event.locationName}</span>
         </div>
         <p className="text-slate-300 text-sm truncate">{event.memberName}</p>
         {event.kind === 'payment' && (
@@ -197,11 +186,10 @@ function ActivityFeedItem({ event }) {
 }
 
 function ActivityFeed() {
-  const feed = useStore((s) => s.activityFeed)
+  const feed      = useStore((s) => s.activityFeed)
   const bottomRef = useRef(null)
 
   useEffect(() => {
-    // Auto-scroll on new events
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [feed])
 
@@ -233,20 +221,20 @@ function ActivityFeed() {
 // ── Dashboard Page ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const gyms = useStore((s) => s.gyms)
-  const gymsLoading = useStore((s) => s.gymsLoading)
-  const gymsError = useStore((s) => s.gymsError)
-  const selectedGymId = useStore((s) => s.selectedGymId)
-  const wsConnected = useStore((s) => s.wsConnected)
+  const locations          = useStore((s) => s.locations)
+  const locationsLoading   = useStore((s) => s.locationsLoading)
+  const locationsError     = useStore((s) => s.locationsError)
+  const selectedLocationId = useStore((s) => s.selectedLocationId)
+  const wsConnected        = useStore((s) => s.wsConnected)
 
-  const selectedGym = gyms.find((g) => g.id === selectedGymId)
+  const selectedLocation = locations.find((l) => l.id === selectedLocationId)
 
-  if (gymsError) {
+  if (locationsError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <span className="text-red-400 text-4xl">⚠️</span>
-        <p className="text-red-400 font-semibold">Failed to load gym data</p>
-        <p className="text-slate-500 text-sm">{gymsError}</p>
+        <p className="text-red-400 font-semibold">Failed to load location data</p>
+        <p className="text-slate-500 text-sm">{locationsError}</p>
         <button
           className="mt-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded text-sm"
           onClick={() => window.location.reload()}
@@ -260,39 +248,35 @@ export default function Dashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Summary Bar */}
-      {gymsLoading ? (
+      {locationsLoading ? (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <SkeletonKpi /><SkeletonKpi /><SkeletonKpi />
         </div>
       ) : (
-        <SummaryBar gyms={gyms} />
+        <SummaryBar locations={locations} />
       )}
 
       {/* Main grid */}
       <div className="grid grid-cols-3 gap-6">
         {/* Left column: Occupancy + Revenue */}
         <div className="col-span-1 flex flex-col gap-6">
-          {gymsLoading || !selectedGym ? (
-            <>
-              <SkeletonKpi />
-              <SkeletonKpi />
-            </>
+          {locationsLoading || !selectedLocation ? (
+            <><SkeletonKpi /><SkeletonKpi /></>
           ) : (
             <>
-              <OccupancyCard gym={selectedGym} wsConnected={wsConnected} />
-              <RevenueCard gym={selectedGym} />
+              <OccupancyCard location={selectedLocation} wsConnected={wsConnected} />
+              <RevenueCard location={selectedLocation} />
             </>
           )}
         </div>
 
-        {/* Right columns: Activity feed + All-gyms grid */}
+        {/* Right columns: Activity feed + All-locations grid */}
         <div className="col-span-2 flex flex-col gap-6">
           <ActivityFeed />
 
-          {/* All gyms mini-grid */}
           <div>
             <h2 className="text-slate-200 font-semibold mb-3">All Locations</h2>
-            {gymsLoading ? (
+            {locationsLoading ? (
               <div className="grid grid-cols-5 gap-3">
                 {[...Array(10)].map((_, i) => (
                   <div key={i} className="animate-pulse bg-[#1A1A2E] rounded-lg p-3 border border-slate-800 h-20" />
@@ -300,28 +284,24 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-5 gap-3">
-                {gyms.map((gym) => {
-                  const pct =
-                    gym.capacity_pct ??
-                    Math.round(((gym.current_occupancy || 0) / gym.capacity) * 100)
+                {locations.map((loc) => {
+                  const pct = loc.capacity_pct ?? Math.round(((loc.current_occupancy || 0) / loc.capacity) * 100)
                   return (
                     <button
-                      key={gym.id}
-                      onClick={() => useStore.getState().selectGym(gym.id)}
+                      key={loc.id}
+                      onClick={() => useStore.getState().selectLocation(loc.id)}
                       className={`text-left rounded-lg p-3 border transition-colors ${
-                        gym.id === selectedGymId
+                        loc.id === selectedLocationId
                           ? 'border-teal-500 bg-teal-500/10'
                           : 'border-slate-800 bg-[#1A1A2E] hover:border-slate-600'
                       }`}
                     >
-                      <p className="text-xs text-slate-400 truncate">
-                        {gym.name.replace('WTF Gyms — ', '')}
-                      </p>
+                      <p className="text-xs text-slate-400 truncate">{loc.name}</p>
                       <p className={`text-xl font-bold font-mono tabular-nums mt-1 ${occupancyColor(pct)}`}>
                         {pct}%
                       </p>
                       <p className="text-xs text-slate-600">
-                        {gym.current_occupancy || 0}/{gym.capacity}
+                        {loc.current_occupancy || 0}/{loc.capacity}
                       </p>
                     </button>
                   )

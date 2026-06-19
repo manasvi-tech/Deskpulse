@@ -7,3 +7,4 @@ coverage/
 postgres_data/
 .playwright/
 test-results/
+CLAUDE.md

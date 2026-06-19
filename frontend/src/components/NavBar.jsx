@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import useStore from '../store/useStore'
 import { useAnomalies } from '../hooks/useAnomalies'
 
@@ -10,11 +10,11 @@ const PAGES = [
 ]
 
 export default function NavBar({ activePage, setActivePage }) {
-  const wsConnected = useStore((s) => s.wsConnected)
-  const gyms = useStore((s) => s.gyms)
-  const selectedGymId = useStore((s) => s.selectedGymId)
-  const selectGym = useStore((s) => s.selectGym)
-  const { activeCount } = useAnomalies()
+  const wsConnected      = useStore((s) => s.wsConnected)
+  const locations        = useStore((s) => s.locations)
+  const selectedLocationId = useStore((s) => s.selectedLocationId)
+  const selectLocation   = useStore((s) => s.selectLocation)
+  const { activeCount }  = useAnomalies()
 
   return (
     <nav
@@ -25,7 +25,7 @@ export default function NavBar({ activePage, setActivePage }) {
         {/* Logo */}
         <div className="flex items-center gap-3 shrink-0">
           <span className="text-teal-400 font-bold text-lg tracking-tight font-mono">
-            ⚡ WTF LivePulse
+            ⚡ DeskPulse
           </span>
 
           {/* WS indicator */}
@@ -50,28 +50,27 @@ export default function NavBar({ activePage, setActivePage }) {
           </div>
         </div>
 
-        {/* Gym selector */}
+        {/* Location selector */}
         <div className="flex-1 mx-6 overflow-x-auto">
           <div className="flex gap-1 min-w-max">
-            {gyms.map((gym) => {
-              const shortName = gym.name.replace('WTF Gyms — ', '')
-              const isSelected = gym.id === selectedGymId
+            {locations.map((loc) => {
+              const isSelected = loc.id === selectedLocationId
               return (
                 <button
-                  key={gym.id}
-                  onClick={() => selectGym(gym.id)}
+                  key={loc.id}
+                  onClick={() => selectLocation(loc.id)}
                   className={`px-3 py-1.5 rounded text-xs font-medium whitespace-nowrap transition-colors ${
                     isSelected
                       ? 'bg-teal-500 text-white'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
                   }`}
-                  data-testid={`gym-tab-${gym.id}`}
+                  data-testid={`gym-tab-${loc.id}`}
                 >
-                  {shortName}
+                  {loc.name}
                 </button>
               )
             })}
-            {gyms.length === 0 && (
+            {locations.length === 0 && (
               <div className="flex gap-1">
                 {[...Array(5)].map((_, i) => (
                   <div

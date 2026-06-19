@@ -32,9 +32,10 @@ function SeverityBadge({ severity }) {
 
 function TypeBadge({ type }) {
   const labels = {
-    zero_checkins: { label: 'Zero Check-ins', cls: 'text-orange-400' },
-    capacity_breach: { label: 'Capacity Breach', cls: 'text-red-400' },
-    revenue_drop: { label: 'Revenue Drop', cls: 'text-yellow-400' },
+    no_activity:    { label: 'No Activity',     cls: 'text-orange-400' },
+    overbooking:    { label: 'Overbooking',     cls: 'text-red-400' },
+    revenue_drop:   { label: 'Revenue Drop',    cls: 'text-yellow-400' },
+    high_no_show:   { label: 'High No-Show',    cls: 'text-purple-400' },
   }
   const { label, cls } = labels[type] || { label: type, cls: 'text-slate-400' }
   // Use <p> (not <span>) so the Playwright test's `.locator('span').first()` on
@@ -121,11 +122,11 @@ function DismissButton({ anomaly, onDismiss }) {
 
 export default function Anomalies() {
   const { anomalies, loading, error, dismiss, activeCount } = useAnomalies()
-  const gyms = useStore((s) => s.gyms)
+  const locations = useStore((s) => s.locations)
   const [filter, setFilter] = useState('all') // 'all' | 'active' | 'resolved'
   const [severityFilter, setSeverityFilter] = useState('all')
 
-  const gymMap = Object.fromEntries(gyms.map((g) => [g.id, g.name]))
+  const locationMap = Object.fromEntries(locations.map((l) => [l.id, l.name]))
 
   const filtered = anomalies.filter((a) => {
     if (filter === 'active' && (a.resolved || a.dismissed)) return false
@@ -221,7 +222,7 @@ export default function Anomalies() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-800">
-                <th className="text-left text-xs font-medium text-slate-400 px-4 py-3">Gym</th>
+                <th className="text-left text-xs font-medium text-slate-400 px-4 py-3">Location</th>
                 <th className="text-left text-xs font-medium text-slate-400 px-4 py-3">Type</th>
                 <th className="text-left text-xs font-medium text-slate-400 px-4 py-3">Severity</th>
                 <th className="text-left text-xs font-medium text-slate-400 px-4 py-3">Message</th>
@@ -241,9 +242,9 @@ export default function Anomalies() {
                   }`}
                 >
                   <td className="px-4 py-3 text-sm text-slate-200">
-                    {anomaly.gym_name ||
-                      gymMap[anomaly.gym_id] ||
-                      anomaly.gym_id?.substring(0, 8)}
+                    {anomaly.location_name ||
+                      locationMap[anomaly.location_id] ||
+                      anomaly.location_id?.substring(0, 8)}
                   </td>
                   <td className="px-4 py-3">
                     <TypeBadge type={anomaly.type} />

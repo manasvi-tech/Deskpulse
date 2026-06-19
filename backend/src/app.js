@@ -1,23 +1,13 @@
-/**
- * WTF LivePulse — Express Application
- * Entry point: configures middleware, routes, WebSocket, and background jobs.
- * Calls start() only when invoked directly (not when required by tests).
- */
-
 require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const http    = require('http');
 
 const pool = require('./db/pool');
-
-// ── Route imports ────────────────────────────────────────────────────────────
 const locationsRouter = require('./routes/locations');
 const anomaliesRouter = require('./routes/anomalies');
 const analyticsRouter = require('./routes/analytics');
 const simulatorRouter = require('./routes/simulator');
-
-// ── App setup ────────────────────────────────────────────────────────────────
 const app    = express();
 const server = http.createServer(app);
 const PORT   = process.env.PORT || 3001;
@@ -38,36 +28,33 @@ app.get('/api/health', async (req, res) => {
     res.status(503).json({ status: 'error', db: 'disconnected', error: err.message });
   }
 });
-
-// ── API routes ───────────────────────────────────────────────────────────────
+  
 app.use('/api/locations', locationsRouter);
 app.use('/api/anomalies', anomaliesRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/simulator', simulatorRouter);
-
-// ── 404 fallback ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// ── Global error handler ─────────────────────────────────────────────────────
 app.use((err, req, res, _next) => {
   console.error('[error]', err.message);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ── Startup sequence ─────────────────────────────────────────────────────────
 async function start() {
-  // Verify DB connectivity and seed status
+  // Verify DB connectivity; run seed if empty
   try {
     const { rows } = await pool.query('SELECT COUNT(*)::int AS cnt FROM locations');
     if (rows[0].cnt === 0) {
-      console.log('[app] No locations found — seed should have run via docker-entrypoint-initdb.d');
+      console.log('[app] No locations found — running seed...');
+      const { seed } = require('./db/seeds/seed');
+      await seed();
     } else {
       console.log(`[app] Database ready: ${rows[0].cnt} locations loaded`);
     }
   } catch (err) {
-    console.error('[app] DB check failed:', err.message);
+    console.error('[app] DB check / seed failed:', err.message);
   }
 
   // Attach WebSocket server to the HTTP server

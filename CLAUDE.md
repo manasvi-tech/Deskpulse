@@ -9,7 +9,6 @@ DeskPulse — a real-time operations intelligence dashboard for co-working space
 - All critical PostgreSQL queries must return under 1ms on a seeded 90-day dataset
 - A sequential scan on `checkins` or `payments` is an automatic failure
 - WebSocket only — no polling anywhere
-- The UI must use a dark theme — no white backgrounds
 
 ---
 
@@ -206,7 +205,7 @@ Both tiers shown separately in the Analytics panel. Clicking a member shows thei
 
 ## Data Simulation Engine
 
-- Seed: 10 co-working locations, 5,000 members, 90 days of historical data
+- Seed: 10 co-working locations, 1,500 members, 90 days of historical data
 - Realistic patterns: peak volume 9–12am and 2–5pm (business hours), low mornings and evenings, minimal weekends
 - New events generated every 2 seconds when running
 - Writes directly to PostgreSQL (not mocked)
@@ -216,39 +215,70 @@ Both tiers shown separately in the Analytics panel. Clicking a member shows thei
 
 ## UI Design Rules
 
+**Theme: Light**
+
 **Color Palette**
-- Background: #0D0D1A
-- Cards: #1A1A2E
-- Accent: teal — use `teal-400` / `teal-500` consistently everywhere
-- Primary text: #E2E8F0
+- Page background: #F8F9FA
+- Card background: #FFFFFF
+- Card border: #E2E8F0
+- Sidebar/nav background: #1E293B (only dark element)
+- Sidebar text and icons: #FFFFFF
+- Primary text: #0F172A
 - Secondary text: #64748B
+- Accent: #0EA5E9 (sky-500) — used sparingly on interactive elements only
+- Success/healthy: #16A34A
+- Warning: #D97706
+- Critical: #DC2626
+- Muted label text: #94A3B8
 
 **Typography**
-- Font: Inter, Sora, or JetBrains Mono for data
-- Body minimum: 13px
-- KPI values (occupancy, revenue): 32–48px large numerals
-- No serif fonts
+- Font: Inter throughout
+- Page titles: text-xl font-semibold
+- Card titles: text-sm font-medium text-slate-500
+- KPI numbers: text-4xl font-bold text-slate-900
+- Body: text-sm text-slate-700
+- Labels: text-xs font-medium uppercase text-slate-400
 
-**Live Indicators**
-- Pulsing green dot next to occupancy when WebSocket is connected
-- Red dot when disconnected — never show 'live' when connection is lost
+**Layout**
+- Left sidebar: w-56, bg-slate-800, fixed height, white text and icons
+- Main content: bg-slate-50 (#F8F9FA), p-6
+- Cards: bg-white, border border-slate-200, rounded-xl, p-5
+- No heavy shadows — border only on cards
+- No gradients anywhere
 
-**Animations**
-- KPI numbers must animate smoothly on change (count-up, 300–500ms) — no jumping
-
-**States**
-- All panels must show skeleton loaders while fetching
-- No empty boxes, no 'undefined' visible anywhere
-- Failed API/WebSocket calls must show a meaningful error in the relevant panel — not just console.log
+**Tailwind classes to use**
+- Page background: `bg-slate-50`
+- Cards: `bg-white border border-slate-200 rounded-xl`
+- Sidebar: `bg-slate-800`
+- Accent buttons: `bg-sky-500 hover:bg-sky-600 text-white`
+- KPI numbers: `text-4xl font-bold text-slate-900`
+- Secondary text: `text-slate-500`
+- Skeleton loaders: `animate-pulse bg-slate-200 rounded`
 
 **Occupancy colour coding**
-- < 60% = green
-- 60–85% = yellow
-- > 85% = red
+- < 60%: `text-green-600` (light theme needs darker greens)
+- 60–85%: `text-amber-600`
+- > 85%: `text-red-600`
+
+**Live Indicators**
+- WebSocket connected: small pulsing green dot (`bg-green-500 animate-ping`)
+- WebSocket disconnected: grey dot — never show 'live' when connection is lost
+
+**States**
+- Skeleton loaders: `animate-pulse bg-slate-200 rounded` on all panels while fetching
+- Error states: show inline in the relevant card with a warning icon — not just console.log
+- No undefined visible anywhere in the UI
 
 **Responsiveness**
 - Functional at 1280px minimum width
-- Mobile not required but broken layout at 1280px is marked down
+
+**What NOT to do (UI)**
+- No dark backgrounds except the sidebar
+- No neon or bright teal anywhere
+- No card shadows heavier than the border
+- No gradients
+- No Bootstrap or MUI defaults
+- No rounded corners larger than rounded-xl
 
 ---
 
@@ -300,16 +330,16 @@ Three services only: db (postgres:15-alpine), backend (Node 20), frontend (React
 
 | # | Name | City | Hot Desks | Ded. Desks | Priv. Offices | Mtg. Rooms | Opens | Closes |
 |---|---|---|---|---|---|---|---|---|
-| 1 | DeskPulse — Lajpat Nagar | New Delhi | 80 | 40 | 12 | 4 | 08:00 | 22:00 |
-| 2 | DeskPulse — Connaught Place | New Delhi | 60 | 30 | 10 | 3 | 07:30 | 22:00 |
-| 3 | DeskPulse — Bandra West | Mumbai | 100 | 50 | 15 | 5 | 07:00 | 23:00 |
-| 4 | DeskPulse — Powai | Mumbai | 90 | 45 | 12 | 4 | 07:30 | 22:00 |
-| 5 | DeskPulse — Indiranagar | Bengaluru | 80 | 40 | 10 | 4 | 07:30 | 22:00 |
-| 6 | DeskPulse — Koramangala | Bengaluru | 70 | 35 | 8 | 3 | 08:00 | 22:00 |
-| 7 | DeskPulse — Banjara Hills | Hyderabad | 60 | 30 | 8 | 3 | 08:00 | 21:00 |
-| 8 | DeskPulse — Sector 18 Noida | Noida | 50 | 25 | 6 | 2 | 08:00 | 21:00 |
-| 9 | DeskPulse — Salt Lake | Kolkata | 40 | 20 | 5 | 2 | 08:00 | 21:00 |
-| 10 | DeskPulse — Velachery | Chennai | 35 | 18 | 4 | 2 | 08:00 | 21:00 |
+| 1 | Awfis — Koramangala | Bengaluru | 60 | 30 | 8 | 4 | 08:00 | 22:00 |
+| 2 | Awfis — Indiranagar | Bengaluru | 45 | 20 | 6 | 3 | 08:00 | 22:00 |
+| 3 | CoWrks — Bandra West | Mumbai | 80 | 40 | 12 | 6 | 07:00 | 23:00 |
+| 4 | CoWrks — Powai | Mumbai | 65 | 30 | 10 | 4 | 07:30 | 22:30 |
+| 5 | Innov8 — Connaught Place | New Delhi | 55 | 25 | 8 | 4 | 08:00 | 22:00 |
+| 6 | Innov8 — Lajpat Nagar | New Delhi | 40 | 20 | 6 | 3 | 08:00 | 21:30 |
+| 7 | 91Springboard — Banjara Hills | Hyderabad | 50 | 25 | 8 | 3 | 08:00 | 22:00 |
+| 8 | 91Springboard — Sector 18 Noida | Noida | 35 | 15 | 5 | 2 | 08:00 | 21:30 |
+| 9 | BHive — Salt Lake | Kolkata | 30 | 12 | 4 | 2 | 08:00 | 21:00 |
+| 10 | BHIVE — Velachery | Chennai | 25 | 10 | 3 | 2 | 08:00 | 21:00 |
 
 All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcode UUIDs. Store location UUIDs in variables after insertion to use as foreign keys downstream.
 
@@ -317,31 +347,31 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 
 | Location | Occupancy Capacity |
 |---|---|
-| Lajpat Nagar | 132 |
-| Connaught Place | 100 |
-| Bandra West | 165 |
-| Powai | 147 |
-| Indiranagar | 130 |
-| Koramangala | 113 |
-| Banjara Hills | 98 |
-| Sector 18 Noida | 81 |
-| Salt Lake | 65 |
-| Velachery | 57 |
+| Awfis — Koramangala | 98 |
+| Awfis — Indiranagar | 71 |
+| CoWrks — Bandra West | 132 |
+| CoWrks — Powai | 105 |
+| Innov8 — Connaught Place | 88 |
+| Innov8 — Lajpat Nagar | 66 |
+| 91Springboard — Banjara Hills | 83 |
+| 91Springboard — Sector 18 Noida | 55 |
+| BHive — Salt Lake | 46 |
+| BHIVE — Velachery | 38 |
 
-### Member Distribution (exactly 5,000 total)
+### Member Distribution (exactly 1,500 total)
 
 | Location | Count | day_pass% | hot_desk% | dedicated_desk% | private_office% | Active % |
 |---|---|---|---|---|---|---|
-| Lajpat Nagar | 650 | 40% | 30% | 20% | 10% | 88% |
-| Connaught Place | 550 | 35% | 30% | 25% | 10% | 85% |
-| Bandra West | 750 | 35% | 30% | 25% | 10% | 90% |
-| Powai | 600 | 35% | 30% | 25% | 10% | 87% |
-| Indiranagar | 550 | 40% | 30% | 20% | 10% | 89% |
-| Koramangala | 500 | 40% | 30% | 20% | 10% | 86% |
-| Banjara Hills | 450 | 45% | 30% | 17% | 8% | 84% |
-| Sector 18 Noida | 400 | 50% | 30% | 15% | 5% | 82% |
-| Salt Lake | 300 | 55% | 30% | 12% | 3% | 80% |
-| Velachery | 250 | 55% | 30% | 12% | 3% | 78% |
+| Awfis — Koramangala | 180 | 40% | 30% | 20% | 10% | 86% |
+| Awfis — Indiranagar | 140 | 40% | 30% | 20% | 10% | 89% |
+| CoWrks — Bandra West | 220 | 35% | 30% | 25% | 10% | 90% |
+| CoWrks — Powai | 180 | 35% | 30% | 25% | 10% | 87% |
+| Innov8 — Connaught Place | 160 | 35% | 30% | 25% | 10% | 85% |
+| Innov8 — Lajpat Nagar | 120 | 40% | 30% | 20% | 10% | 88% |
+| 91Springboard — Banjara Hills | 150 | 45% | 30% | 17% | 8% | 84% |
+| 91Springboard — Sector 18 Noida | 110 | 50% | 30% | 15% | 5% | 82% |
+| BHive — Salt Lake | 130 | 55% | 30% | 12% | 3% | 80% |
+| BHIVE — Velachery | 110 | 55% | 30% | 12% | 3% | 78% |
 
 - 80% new members, 20% renewals at seed time
 - Inactive members: 8% of each location's total. Frozen: 4%
@@ -355,14 +385,14 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 
 | Tier | Condition | Minimum Count |
 |---|---|---|
-| Expiring Soon | Active membership, end_date within 7 days, no newer active membership | 60 members |
-| Inactive | Active membership, no check-in for 30+ days | 120 members |
+| Expiring Soon | Active membership, end_date within 7 days, no newer active membership | 20 members |
+| Inactive | Active membership, no check-in for 30+ days | 40 members |
 
 **Critical:** Inactive members must have an actual checkins row whose checked_in timestamp matches their last known visit. If a member's last check-in was 35 days ago, there must be a real row in checkins with that timestamp. Seed this intentionally by setting start_date ≥ 45 days ago and inserting their last check-in 35+ days ago with no subsequent check-ins.
 
 ### Check-in Volume
-- Total: ~270,000 records across all 10 locations over 90 days
-- ~300 check-ins per location per day average
+- Total: ~90,000 records across all 10 locations over 90 days
+- ~100 check-ins per location per day average
 
 ### Hourly Distribution (weight check-in generation by these multipliers)
 
@@ -392,11 +422,11 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 
 | Tier | Locations | Open Check-ins to Seed |
 |---|---|---|
-| Large (130+ capacity) | Bandra West, Powai, Lajpat Nagar, Indiranagar | 25–35 open check-ins |
-| Medium (80–129 capacity) | Connaught Place, Koramangala, Banjara Hills | 15–25 open check-ins |
-| Small (<80 capacity) | Noida, Salt Lake, Velachery | 8–15 open check-ins |
+| Large (100+ capacity) | CoWrks — Bandra West, CoWrks — Powai | 20–30 open check-ins |
+| Medium (65–99 capacity) | Awfis — Koramangala, Innov8 — Connaught Place, 91Springboard — Banjara Hills, Awfis — Indiranagar, Innov8 — Lajpat Nagar | 10–18 open check-ins |
+| Small (<65 capacity) | 91Springboard — Sector 18 Noida, BHive — Salt Lake, BHIVE — Velachery | 5–10 open check-ins |
 
-**Exception:** Velachery gets 0 open check-ins (see Anomaly Scenario A below). Bandra West gets 150–160 open check-ins (see Anomaly Scenario B below).
+**Exception:** BHIVE — Velachery gets 0 open check-ins (see Anomaly Scenario A below). CoWrks — Bandra West gets 120–130 open check-ins (see Anomaly Scenario B below).
 
 ### Payment Data
 
@@ -408,27 +438,27 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 
 ### Anomaly Test Scenarios — Must be pre-built in seed (reviewers check within 60 seconds of docker compose up)
 
-**Scenario A — No Activity (Velachery)**
-- 0 open check-ins for Velachery
-- Most recent checkins row for Velachery must have checked_in ≥ 2 hours 10 minutes before seed execution time
+**Scenario A — No Activity (BHIVE — Velachery)**
+- 0 open check-ins for BHIVE — Velachery
+- Most recent checkins row for BHIVE — Velachery must have checked_in ≥ 2 hours 10 minutes before seed execution time
 - Detector must fire: type = 'no_activity', severity = 'warning'
-- Auto-resolves when any new check-in is recorded for Velachery
+- Auto-resolves when any new check-in is recorded for BHIVE — Velachery
 
-**Scenario B — Overbooking (Bandra West)**
-- Seed 150–160 open check-ins (checked_out = NULL) for Bandra West (occupancy capacity = 165)
+**Scenario B — Overbooking (CoWrks — Bandra West)**
+- Seed 120–130 open check-ins (checked_out = NULL) for CoWrks — Bandra West (occupancy capacity = 132)
 - All checked_in within the last 90 minutes
-- Occupancy = 150–160 / 165 = 91–97% → above 90% threshold
+- Occupancy = 120–130 / 132 = 91–99% → above 90% threshold
 - Detector must fire: type = 'overbooking', severity = 'critical'
-- Must auto-resolve when occupancy drops below 85% (< 140 open check-ins) as simulator runs
+- Must auto-resolve when occupancy drops below 85% (< 112 open check-ins) as simulator runs
 
-**Scenario C — Revenue Drop (Salt Lake)**
-- Same weekday 7 days ago: seed 8–10 payments totalling ≥ ₹15,000 for Salt Lake
-- Today: seed 0–2 payments totalling ≤ ₹3,000 for Salt Lake
+**Scenario C — Revenue Drop (BHive — Salt Lake)**
+- Same weekday 7 days ago: seed 8–10 payments totalling ≥ ₹15,000 for BHive — Salt Lake
+- Today: seed 0–2 payments totalling ≤ ₹3,000 for BHive — Salt Lake
 - Detector must fire: type = 'revenue_drop', severity = 'warning'
 - Do not manipulate payment history for any other location
 
-**Scenario D — High No-Show (Koramangala)**
-- Today: seed 12 confirmed bookings for Koramangala in the bookings table, where 5 of them have status = 'no_show' (41.7% no-show rate, above 30% threshold)
+**Scenario D — High No-Show (Awfis — Koramangala)**
+- Today: seed 12 confirmed bookings for Awfis — Koramangala in the bookings table, where 5 of them have status = 'no_show' (41.7% no-show rate, above 30% threshold)
 - Detector must fire: type = 'high_no_show', severity = 'warning'
 - Auto-resolves when no_show rate drops below 20%
 
@@ -463,7 +493,7 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 
 ## Benchmark Queries (all 6 must pass)
 
-Run against seeded data (5,000 members, 90 days, ~270,000+ check-in records). Screenshots go in `/benchmarks/screenshots/`.
+Run against seeded data (1,500 members, 90 days, ~90,000+ check-in records). Screenshots go in `/benchmarks/screenshots/`.
 
 | # | Query Name | SQL Pattern | Target | Index Used |
 |---|---|---|---|---|
@@ -478,54 +508,7 @@ Always run as: `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)` — execution time must
 
 ---
 
-## Testing Requirements
 
-### Layer 1 — Unit Tests (Jest), minimum 10, all must pass
-- no_activity anomaly fires when active location has no check-ins for 2+ hours during opens_at–closes_at
-- overbooking fires when occupancy > 90% of (total_hot_desks + total_dedicated_desks + total_private_offices)
-- revenue_drop fires when today's revenue < 70% of same weekday last week
-- high_no_show fires when >30% of today's bookings are no_show
-- All 4 anomaly types auto-resolve when conditions clear
-- Simulator generates check-in events with realistic time distribution (peak 9–12am and 2–5pm)
-
-### Layer 2 — Integration Tests (Jest + Supertest), minimum 12, all must pass
-- GET /api/locations returns 10 locations after seeding with correct structure
-- GET /api/locations/:id/live returns all required fields
-- GET /api/anomalies returns empty array when no anomalies exist
-- PATCH /api/anomalies/:id/dismiss returns 403 when severity is 'critical'
-- POST /api/simulator/start returns `{ status: 'running' }`
-- All endpoints return correct HTTP status codes on invalid input (400, 404, 403)
-- Coverage report must be included. Target: 80%+ (below 60% = 0 points)
-
-### Layer 3 — E2E Tests (Playwright), minimum 3, all must run headless
-- Dashboard loads and displays location list without errors
-- Switching location in dropdown updates occupancy count correctly
-- Triggering a check-in via simulator causes activity feed to update within 2 seconds
-- Anomaly appearing in DB causes badge count to increment
-
-**How reviewers run tests:**
-```bash
-cd backend && npm test
-cd frontend && npx playwright test
-```
-Both must work with zero additional configuration.
-
----
-
-## Styling — Tailwind CSS Only
-
-- Use Tailwind utility classes throughout — no custom CSS files except for animations
-- Dark theme enforced: bg-[#0D0D1A] for page, bg-[#1A1A2E] for cards
-- Accent color is teal — use `teal-400` / `teal-500` consistently everywhere
-- KPI numbers: `text-4xl` or `text-5xl font-bold`
-- Secondary text: `text-slate-400`
-- Primary text: `text-slate-200`
-- Skeleton loaders: use `animate-pulse bg-slate-700 rounded` divs
-- Pulsing WebSocket indicator: `animate-ping` on a green/red dot
-- Number count-up animations: use a custom hook with `requestAnimationFrame`
-- Occupancy color: `text-green-400` (<60%), `text-yellow-400` (60–85%), `text-red-400` (>85%)
-
----
 
 ## README Structure (all 5 sections mandatory)
 
@@ -539,31 +522,6 @@ Both must work with zero additional configuration.
 
 ---
 
-## Scoring Cheatsheet (100 points total, pass = 65)
-
-| Points | Criterion | How to nail it |
-|---|---|---|
-| 15 | docker compose up cold start | Test `docker compose down -v && docker compose up` before submitting |
-| 15 | WebSocket live updates | All 5 event types handled, UI updates < 1 second |
-| 15 | Query benchmarks (2.5 per query) | EXPLAIN ANALYZE screenshots in /benchmarks, no seq scans |
-| 12 | All 4 UI modules complete (3 each) | Dashboard, Analytics, Anomaly Log, Simulator Controls |
-| 9 | Anomaly engine — all 4 types + auto-resolve | Test each type manually before submitting |
-| 8 | Backend test coverage 80%+ | Run coverage report, include it in repo |
-| 6 | Playwright E2E — check-in → UI update | Must run headless, must pass |
-| 10 | Code quality — MVC, no secrets, no N+1 | Services layer, env vars only, eager-load relations |
-| 6 | UI visual quality — dark, custom, no broken layout | Tailwind custom colors, test at 1280px |
-| 4 | README — all 5 sections | Write it last, be honest about AI tools |
-
-### Automatic Rejection Triggers (any one = instant fail)
-- Sequential scan on checkins or payments
-- No test files in repo
-- docker compose up fails on first attempt
-- WebSocket replaced with setInterval polling
-- Default UI template with zero customization
-- Hardcoded database password or credential committed
-- AI tool usage omitted from README when AI was clearly used
-
----
 
 ## Future Scope (Phase 2 — do not implement now, schema must not conflict)
 
@@ -580,7 +538,6 @@ Both must work with zero additional configuration.
 - No socket.io client on the frontend
 - No D3 directly for charts
 - No Bootstrap or default MUI theme
-- No white or light backgrounds
 - No class components in React
 - No Redux unless genuinely needed (will be penalised as overengineering)
 - No manual steps required after `docker compose up`

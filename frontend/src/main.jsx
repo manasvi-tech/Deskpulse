@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+﻿import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
 
@@ -9,7 +9,7 @@ import Anomalies from './pages/Anomalies'
 import Simulator from './pages/Simulator'
 
 import { useWebSocket } from './hooks/useWebSocket'
-import { useGymData } from './hooks/useGymData'
+import { useLocationData } from './hooks/useLocationData'
 import { useAnomalies } from './hooks/useAnomalies'
 
 function App() {
@@ -17,7 +17,7 @@ function App() {
 
   // Bootstrap data + WebSocket on mount
   useWebSocket()
-  useGymData()
+  useLocationData()
   useAnomalies()
 
   const pages = {

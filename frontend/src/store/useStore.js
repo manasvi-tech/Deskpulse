@@ -1,42 +1,41 @@
 import { create } from 'zustand'
 
-const useStore = create((set, get) => ({
+const useStore = create((set) => ({
   // ── WebSocket ────────────────────────────────────────────────────────────────
   wsConnected: false,
   setWsConnected: (connected) => set({ wsConnected: connected }),
 
-  // ── Gyms ─────────────────────────────────────────────────────────────────────
-  gyms: [],
-  gymsLoading: true,
-  gymsError: null,
-  selectedGymId: null,
+  // ── Locations ─────────────────────────────────────────────────────────────────
+  locations: [],
+  locationsLoading: true,
+  locationsError: null,
+  selectedLocationId: null,
 
-  setGyms: (gyms) => {
-    // Belt-and-suspenders: always store an array even if caller passes an object
-    const safeGyms = Array.isArray(gyms) ? gyms : []
+  setLocations: (locations) => {
+    const safe = Array.isArray(locations) ? locations : []
     set((state) => ({
-      gyms: safeGyms,
-      gymsLoading: false,
-      gymsError: null,
-      selectedGymId: state.selectedGymId || (safeGyms.length > 0 ? safeGyms[0].id : null),
+      locations: safe,
+      locationsLoading: false,
+      locationsError: null,
+      selectedLocationId: state.selectedLocationId || (safe.length > 0 ? safe[0].id : null),
     }))
   },
-  setGymsError: (err) => set({ gymsError: err, gymsLoading: false }),
-  selectGym: (gymId) => set({ selectedGymId: gymId }),
+  setLocationsError: (err) => set({ locationsError: err, locationsLoading: false }),
+  selectLocation: (locationId) => set({ selectedLocationId: locationId }),
 
-  updateGymOccupancy: (gymId, currentOccupancy, capacityPct) =>
+  updateLocationOccupancy: (locationId, currentOccupancy, capacityPct) =>
     set((state) => ({
-      gyms: state.gyms.map((g) =>
-        g.id === gymId
-          ? { ...g, current_occupancy: currentOccupancy, capacity_pct: capacityPct }
-          : g
+      locations: state.locations.map((l) =>
+        l.id === locationId
+          ? { ...l, current_occupancy: currentOccupancy, capacity_pct: capacityPct }
+          : l
       ),
     })),
 
-  updateGymRevenue: (gymId, todayRevenue) =>
+  updateLocationRevenue: (locationId, todayRevenue) =>
     set((state) => ({
-      gyms: state.gyms.map((g) =>
-        g.id === gymId ? { ...g, today_revenue: todayRevenue } : g
+      locations: state.locations.map((l) =>
+        l.id === locationId ? { ...l, today_revenue: todayRevenue } : l
       ),
     })),
 
@@ -46,7 +45,6 @@ const useStore = create((set, get) => ({
   anomaliesError: null,
 
   setAnomalies: (anomalies) =>
-    // Belt-and-suspenders: always store an array even if caller passes an object
     set({ anomalies: Array.isArray(anomalies) ? anomalies : [], anomaliesLoading: false, anomaliesError: null }),
   setAnomaliesError: (err) =>
     set({ anomaliesError: err, anomaliesLoading: false }),
@@ -82,7 +80,7 @@ const useStore = create((set, get) => ({
   setSimulatorSpeed: (speed) => set({ simulatorSpeed: speed }),
 
   // ── Analytics cache ───────────────────────────────────────────────────────────
-  analyticsData: {},          // keyed by gymId+dateRange
+  analyticsData: {},
   analyticsLoading: false,
   analyticsError: null,
   setAnalyticsData: (key, data) =>
@@ -94,12 +92,14 @@ const useStore = create((set, get) => ({
   setAnalyticsLoading: (v) => set({ analyticsLoading: v }),
   setAnalyticsError: (err) => set({ analyticsError: err, analyticsLoading: false }),
 
-  crossGymData: [],
-  crossGymLoading: false,
-  crossGymError: null,
-  setCrossGymData: (data) => set({ crossGymData: data, crossGymLoading: false, crossGymError: null }),
-  setCrossGymLoading: (v) => set({ crossGymLoading: v }),
-  setCrossGymError: (err) => set({ crossGymError: err, crossGymLoading: false }),
+  crossLocationData: [],
+  crossLocationLoading: false,
+  crossLocationError: null,
+  setCrossLocationData: (data) =>
+    set({ crossLocationData: data, crossLocationLoading: false, crossLocationError: null }),
+  setCrossLocationLoading: (v) => set({ crossLocationLoading: v }),
+  setCrossLocationError: (err) =>
+    set({ crossLocationError: err, crossLocationLoading: false }),
 }))
 
 export default useStore
