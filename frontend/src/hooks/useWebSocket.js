@@ -1,4 +1,4 @@
-﻿/**
+/**
  * useWebSocket — persistent WebSocket connection with exponential-backoff reconnect.
  * All WS payloads use location_id / location_name (backend sends these, not gym_id).
  */
@@ -6,9 +6,13 @@
 import { useEffect, useRef } from 'react'
 import useStore from '../store/useStore'
 
-const WS_URL              = import.meta.env.VITE_WS_URL || 'ws://localhost:3001'
 const RECONNECT_DELAY_MS  = 3000
 const MAX_RECONNECT_DELAY = 30_000
+
+function getWsUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}/ws`
+}
 
 export function useWebSocket() {
   const wsRef          = useRef(null)
@@ -98,6 +102,7 @@ export function useWebSocket() {
       if (destroyedRef.current) return
       if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return
 
+      const WS_URL = getWsUrl()
       console.log(`[WS] Connecting → ${WS_URL}`)
 
       let ws

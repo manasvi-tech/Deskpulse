@@ -1,23 +1,59 @@
 require('dotenv').config();
-const express = require('express');
-const cors    = require('cors');
-const http    = require('http');
+const express      = require('express');
+const cors         = require('cors');
+const http         = require('http');
+const cookieParser = require('cookie-parser');
 
 const pool = require('./db/pool');
+
 const locationsRouter = require('./routes/locations');
 const anomaliesRouter = require('./routes/anomalies');
 const analyticsRouter = require('./routes/analytics');
 const simulatorRouter = require('./routes/simulator');
+const authRouter      = require('./routes/auth');
+const usersRouter     = require('./routes/users');
+const membersRouter   = require('./routes/members');
+const checkinsRouter  = require('./routes/checkins');
+
+const { authMiddleware, requireRole } = require('./middleware/auth');
+
 const app    = express();
 const server = http.createServer(app);
 const PORT   = process.env.PORT || 3001;
 
+// ── CORS — credentials required for httpOnly cookie auth ──────────────────────
 app.use(cors({
-  origin: '*',
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
 app.use(express.json());
+app.use(cookieParser());
+
+// ── Demo mode guard — blocks all writes except allowed paths ──────────────────
+const DEMO_ALLOWED_PREFIXES = [
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/simulator/start',
+  '/api/simulator/stop',
+  '/api/simulator/reset',
+  '/api/checkins',   // covers POST /api/checkins and PATCH /api/checkins/checkout/*
+];
+
+const demoGuard = (req, res, next) => {
+  if (process.env.DEMO_MODE === 'true' && req.method !== 'GET') {
+    const isDismiss = req.path.includes('/dismiss');
+    const isRenew   = req.path.endsWith('/renew');
+    const isAllowed = DEMO_ALLOWED_PREFIXES.some(p => req.path.startsWith(p));
+    if (!isAllowed && !isDismiss && !isRenew) {
+      return res.status(403).json({ demo: true, message: 'Not allowed in demo mode' });
+    }
+  }
+  next();
+};
+app.use(demoGuard);
 
 // ── Health check (used by Docker healthcheck + frontend depends_on) ──────────
 app.get('/api/health', async (req, res) => {
@@ -28,11 +64,35 @@ app.get('/api/health', async (req, res) => {
     res.status(503).json({ status: 'error', db: 'disconnected', error: err.message });
   }
 });
-  
-app.use('/api/locations', locationsRouter);
-app.use('/api/anomalies', anomaliesRouter);
-app.use('/api/analytics', analyticsRouter);
-app.use('/api/simulator', simulatorRouter);
+
+// ── Auth routes (no auth middleware — login/logout/me are public or self-auth) ─
+app.use('/api/auth', authRouter);
+
+// ── Protected routes ──────────────────────────────────────────────────────────
+
+// For /api/locations/:id/live and /:id/analytics, frontdesk can only see their own location.
+// We extract the UUID from originalUrl because req.params isn't populated at app.use level.
+const locationScopeGuard = (req, res, next) => {
+  if (!req.user || req.user.role === 'super_admin') return next();
+  const match = req.originalUrl.match(/\/api\/locations\/([^/?]+)\/(live|analytics)/);
+  if (match) {
+    const locationId = match[1];
+    if (locationId !== req.user.location_id) {
+      return res.status(403).json({ error: 'Access denied to this location' });
+    }
+  }
+  next();
+};
+
+app.use('/api/locations', authMiddleware, locationScopeGuard, locationsRouter);
+app.use('/api/anomalies', authMiddleware, anomaliesRouter);
+app.use('/api/analytics', authMiddleware, analyticsRouter);
+app.use('/api/simulator', authMiddleware, requireRole('super_admin'), simulatorRouter);
+
+app.use('/api/users',    usersRouter);    // auth + super_admin enforced inside the router
+app.use('/api/members',  membersRouter);  // auth enforced inside the router
+app.use('/api/checkins', checkinsRouter); // auth enforced inside the router
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });

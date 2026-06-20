@@ -25,7 +25,7 @@ export default function NavBar({ activePage, setActivePage }) {
         {/* Logo */}
         <div className="flex items-center gap-3 shrink-0">
           <span className="text-sky-400 font-bold text-lg tracking-tight font-mono">
-            ⚡ DeskPulse
+            DeskPulse
           </span>
 
           {/* WS indicator */}

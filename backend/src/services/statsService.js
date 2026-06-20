@@ -273,6 +273,74 @@ async function getLocationAnalytics(locationId, dateRange) {
   };
 }
 
+// ── Members list with live status (pagination + search) ──────────────────────
+async function getMembersWithStatus(locationId, search, page, limit) {
+  const offset = (page - 1) * limit;
+  const { rows } = await pool.query(
+    `SELECT
+       m.id, m.name, m.email, m.phone, m.status, m.created_at,
+       l.name AS location_name,
+       ms.plan_type, ms.start_date, ms.end_date, ms.status AS membership_status,
+       ms.id AS membership_id,
+       ci.id AS active_checkin_id,
+       ci.checked_in AS checked_in_at,
+       CASE
+         WHEN ci.id IS NOT NULL THEN 'checked_in'
+         WHEN ms.end_date < NOW() THEN 'expired'
+         WHEN ms.end_date <= NOW() + INTERVAL '7 days' THEN 'expiring_soon'
+         WHEN m.status = 'inactive' THEN 'inactive'
+         WHEN m.status = 'frozen' THEN 'frozen'
+         ELSE 'active'
+       END AS display_status
+     FROM members m
+     LEFT JOIN locations l ON m.location_id = l.id
+     LEFT JOIN memberships ms ON ms.member_id = m.id
+       AND ms.status = 'active'
+       AND ms.end_date = (
+         SELECT MAX(end_date) FROM memberships
+         WHERE member_id = m.id AND status = 'active'
+       )
+     LEFT JOIN checkins ci ON ci.member_id = m.id AND ci.checked_out IS NULL
+     WHERE
+       ($1::uuid IS NULL OR m.location_id = $1)
+       AND ($2 = '' OR m.name ILIKE '%' || $2 || '%' OR m.email ILIKE '%' || $2 || '%')
+     ORDER BY m.created_at DESC
+     LIMIT $3 OFFSET $4`,
+    [locationId || null, search || '', limit, offset]
+  );
+  return rows;
+}
+
+async function getMembersCount(locationId, search) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS total
+     FROM members m
+     WHERE ($1::uuid IS NULL OR m.location_id = $1)
+       AND ($2 = '' OR m.name ILIKE '%' || $2 || '%' OR m.email ILIKE '%' || $2 || '%')`,
+    [locationId || null, search || '']
+  );
+  return rows[0].total;
+}
+
+async function getActiveMembership(memberId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM memberships
+     WHERE member_id = $1 AND status = 'active'
+     ORDER BY end_date DESC LIMIT 1`,
+    [memberId]
+  );
+  return rows[0] || null;
+}
+
+async function getOpenCheckin(memberId) {
+  const { rows } = await pool.query(
+    `SELECT id, checked_in FROM checkins
+     WHERE member_id = $1 AND checked_out IS NULL LIMIT 1`,
+    [memberId]
+  );
+  return rows[0] || null;
+}
+
 // ── Q5: Cross-location revenue comparison (< 2ms) ────────────────────────────
 /**
  * Revenue totals for all locations over the last 30 days.
@@ -369,4 +437,8 @@ module.exports = {
   getActiveAnomalies,
   getAnomalyById,
   dismissAnomaly,
+  getMembersWithStatus,
+  getMembersCount,
+  getActiveMembership,
+  getOpenCheckin,
 };

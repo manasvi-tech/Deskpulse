@@ -238,16 +238,19 @@ async function simulatePayment() {
 /**
  * One simulation tick.
  * Decision weights based on current time of day and day of week.
+ * A minimum floor of 0.35 ensures events always fire when the simulator
+ * is explicitly running, regardless of the container's UTC hour.
  */
 async function tick() {
   try {
     const hw = getHourWeight();
     const dw = getDowWeight();
 
-    if (hw === 0) return;
-
-    const activity = hw * dw;
-    const rand     = Math.random();
+    // Floor ensures the simulator always generates events when running.
+    // Without this, UTC 00–08 and UTC 22–23 would silently produce nothing.
+    const MIN_FLOOR = 0.35;
+    const activity  = Math.max(hw * dw, MIN_FLOOR);
+    const rand      = Math.random();
 
     if (rand < activity * 0.50) {
       await simulateCheckin();

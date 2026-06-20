@@ -1,5 +1,7 @@
-﻿import React, { useEffect, useRef } from 'react'
+﻿import React, { useEffect } from 'react'
+import { LogIn, LogOut, CreditCard, Activity } from 'lucide-react'
 import useStore from '../store/useStore'
+import { useAuth } from '../hooks/useAuth'
 import { useCountUp } from '../hooks/useCountUp'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -129,8 +131,8 @@ function OccupancyCard({ location, wsConnected }) {
       </div>
       <div className="flex justify-between text-xs text-slate-400 mt-1">
         <span>0</span>
-        <span className="text-slate-500">
-          {pct < 60 ? '🟢 Normal' : pct <= 85 ? '🟡 Busy' : '🔴 Near Capacity'}
+        <span className={`font-medium text-xs ${pct < 60 ? 'text-green-600' : pct <= 85 ? 'text-amber-600' : 'text-red-600'}`}>
+          {pct < 60 ? 'Normal' : pct <= 85 ? 'Busy' : 'Near Capacity'}
         </span>
         <span>{location.capacity}</span>
       </div>
@@ -154,17 +156,20 @@ function RevenueCard({ location }) {
   )
 }
 
+const FEED_ICONS = {
+  checkin:  { Icon: LogIn,       label: 'Check-in',  color: 'text-green-600', bg: 'bg-green-50' },
+  checkout: { Icon: LogOut,      label: 'Check-out', color: 'text-slate-500', bg: 'bg-slate-100' },
+  payment:  { Icon: CreditCard,  label: 'Payment',   color: 'text-sky-600',   bg: 'bg-sky-50' },
+}
+
 function ActivityFeedItem({ event }) {
-  const icons = {
-    checkin:  { emoji: '🏢', label: 'Check-in',  color: 'text-green-600' },
-    checkout: { emoji: '👋', label: 'Check-out', color: 'text-slate-500' },
-    payment:  { emoji: '💳', label: 'Payment',   color: 'text-sky-600' },
-  }
-  const { emoji, label, color } = icons[event.kind] || { emoji: '📌', label: 'Event', color: 'text-slate-500' }
+  const { Icon, label, color, bg } = FEED_ICONS[event.kind] || { Icon: Activity, label: 'Event', color: 'text-slate-500', bg: 'bg-slate-100' }
 
   return (
     <div className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
-      <span className="text-base shrink-0 mt-0.5">{emoji}</span>
+      <div className={`shrink-0 mt-0.5 w-6 h-6 rounded-md ${bg} flex items-center justify-center`}>
+        <Icon size={13} className={color} />
+      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`text-xs font-semibold ${color}`}>{label}</span>
@@ -186,12 +191,7 @@ function ActivityFeedItem({ event }) {
 }
 
 function ActivityFeed() {
-  const feed      = useStore((s) => s.activityFeed)
-  const bottomRef = useRef(null)
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [feed])
+  const feed = useStore((s) => s.activityFeed)
 
   return (
     <div className="bg-white rounded-xl p-5 border border-slate-200 flex flex-col h-full">
@@ -201,7 +201,7 @@ function ActivityFeed() {
       </div>
       <div
         className="flex-1 overflow-y-auto"
-        style={{ maxHeight: '380px' }}
+        style={{ maxHeight: '380px', overflowAnchor: 'none' }}
         data-testid="activity-feed"
       >
         {feed.length === 0 ? (
@@ -212,7 +212,6 @@ function ActivityFeed() {
         ) : (
           feed.map((event) => <ActivityFeedItem key={event.id} event={event} />)
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   )
@@ -221,13 +220,24 @@ function ActivityFeed() {
 // ── Dashboard Page ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
+  const { user }           = useAuth()
   const locations          = useStore((s) => s.locations)
   const locationsLoading   = useStore((s) => s.locationsLoading)
   const locationsError     = useStore((s) => s.locationsError)
   const selectedLocationId = useStore((s) => s.selectedLocationId)
   const wsConnected        = useStore((s) => s.wsConnected)
 
-  const selectedLocation = locations.find((l) => l.id === selectedLocationId)
+  // Frontdesk is always locked to their own location
+  const effectiveLocationId =
+    user?.role === 'frontdesk' ? user.location_id : selectedLocationId
+
+  const selectedLocation = locations.find((l) => l.id === effectiveLocationId)
+
+  // Frontdesk sees only their one location in the bottom grid
+  const gridLocations =
+    user?.role === 'frontdesk'
+      ? locations.filter((l) => l.id === user.location_id)
+      : locations
 
   if (locationsError) {
     return (
@@ -271,25 +281,31 @@ export default function Dashboard() {
           <ActivityFeed />
 
           <div>
-            <h2 className="text-slate-900 font-semibold mb-3">All Locations</h2>
+            <h2 className="text-slate-900 font-semibold mb-3">
+              {user?.role === 'frontdesk' ? 'Your Location' : 'All Locations'}
+            </h2>
             {locationsLoading ? (
               <div className="grid grid-cols-5 gap-3">
-                {[...Array(10)].map((_, i) => (
+                {[...Array(user?.role === 'frontdesk' ? 1 : 10)].map((_, i) => (
                   <div key={i} className="animate-pulse bg-white rounded-lg p-3 border border-slate-200 h-20" />
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-5 gap-3">
-                {locations.map((loc) => {
+                {gridLocations.map((loc) => {
                   const pct = loc.capacity_pct ?? Math.round(((loc.current_occupancy || 0) / loc.capacity) * 100)
+                  const isSelected = loc.id === effectiveLocationId
+                  const isClickable = user?.role !== 'frontdesk'
                   return (
                     <button
                       key={loc.id}
-                      onClick={() => useStore.getState().selectLocation(loc.id)}
+                      onClick={() => isClickable && useStore.getState().selectLocation(loc.id)}
                       className={`text-left rounded-lg p-3 border transition-colors ${
-                        loc.id === selectedLocationId
+                        isSelected
                           ? 'border-sky-500 bg-sky-50'
-                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          : isClickable
+                          ? 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          : 'border-slate-200 bg-white cursor-default'
                       }`}
                     >
                       <p className="text-xs text-slate-500 truncate">{loc.name}</p>

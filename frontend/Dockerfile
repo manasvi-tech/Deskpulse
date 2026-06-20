@@ -16,9 +16,11 @@ COPY . .
 # Build args for Vite (can be overridden via docker-compose environment)
 ARG VITE_API_URL=http://localhost:3001
 ARG VITE_WS_URL=ws://localhost:3001
+ARG VITE_DEMO_MODE=false
 
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
+ENV VITE_DEMO_MODE=$VITE_DEMO_MODE
 
 RUN npm run build
 

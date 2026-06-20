@@ -1,12 +1,11 @@
 ﻿import React, { useState } from 'react'
 import useStore from '../store/useStore'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
 async function apiPost(path, body = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -181,7 +180,7 @@ export default function Simulator() {
         <ul className="space-y-2 text-sm text-slate-500">
           <li className="flex items-start gap-2">
             <span className="text-sky-500 shrink-0">•</span>
-            Events are written directly to PostgreSQL — no mocking
+            Events are written directly to PostgreSQL - no mocking
           </li>
           <li className="flex items-start gap-2">
             <span className="text-sky-500 shrink-0">•</span>
@@ -193,7 +192,7 @@ export default function Simulator() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-sky-500 shrink-0">•</span>
-            Anomaly detector runs every 30 seconds — watch the Anomalies tab
+            Anomaly detector runs every 30 seconds - watch the Anomalies tab
           </li>
           <li className="flex items-start gap-2">
             <span className="text-sky-500 shrink-0">•</span>

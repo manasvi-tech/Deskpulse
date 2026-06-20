@@ -4,8 +4,10 @@ import {
   PieChart, Pie, Cell, CartesianGrid,
 } from 'recharts'
 import useStore from '../store/useStore'
+import { useAuth } from '../hooks/useAuth'
 import { fetchLocationAnalytics, fetchCrossLocation } from '../hooks/useLocationData'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
+import LocationAccessDenied from '../components/LocationAccessDenied'
 
 const DAYS  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
@@ -306,6 +308,7 @@ function CrossLocationChart({ data, loading, error }) {
 // ── Main Analytics Page ───────────────────────────────────────────────────────
 
 export default function Analytics() {
+  const { user }               = useAuth()
   const selectedLocationId    = useStore((s) => s.selectedLocationId)
   const locations              = useStore((s) => s.locations)
   const crossLocationData      = useStore((s) => s.crossLocationData)
@@ -319,22 +322,37 @@ export default function Analytics() {
   const [analyticsData, setAnalyticsData]       = useState(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsError, setAnalyticsError]     = useState(null)
+  const [accessDenied, setAccessDenied]         = useState(false)
 
-  const selectedLocation = locations.find((l) => l.id === selectedLocationId)
+  // Frontdesk always sees their own location
+  const effectiveLocationId =
+    user?.role === 'frontdesk' ? user.location_id : selectedLocationId
+
+  const selectedLocation = locations.find((l) => l.id === effectiveLocationId)
 
   useEffect(() => {
-    if (!selectedLocationId) return
+    if (!effectiveLocationId) return
     let cancelled = false
     setAnalyticsLoading(true)
     setAnalyticsError(null)
     setAnalyticsData(null)
+    setAccessDenied(false)
 
-    fetchLocationAnalytics(selectedLocationId, dateRange)
+    fetchLocationAnalytics(effectiveLocationId, dateRange)
       .then((d) => { if (!cancelled) { setAnalyticsData(d); setAnalyticsLoading(false) } })
-      .catch((err) => { if (!cancelled) { setAnalyticsError(err.message || 'Failed to load analytics'); setAnalyticsLoading(false) } })
+      .catch((err) => {
+        if (!cancelled) {
+          if (err.message?.includes('403')) {
+            setAccessDenied(true)
+          } else {
+            setAnalyticsError(err.message || 'Failed to load analytics')
+          }
+          setAnalyticsLoading(false)
+        }
+      })
 
     return () => { cancelled = true }
-  }, [selectedLocationId, dateRange])
+  }, [effectiveLocationId, dateRange])
 
   useEffect(() => {
     if (safeArray(crossLocationData).length > 0 || crossLocationLoading) return
@@ -374,39 +392,49 @@ export default function Analytics() {
         </div>
       </div>
 
-      {analyticsError && (
+      {accessDenied && (
+        <LocationAccessDenied user={user} selectedLocation={selectedLocation} />
+      )}
+
+      {!accessDenied && analyticsError && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 text-sm">⚠️ {analyticsError}</div>
       )}
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 bg-white rounded-xl p-5 border border-slate-200">
-          <h2 className="text-slate-900 font-semibold mb-4">Peak Hours Heatmap (Last 7 Days)</h2>
-          {analyticsLoading ? <SkeletonBlock h="h-64" /> : <PeakHoursHeatmap heatmapData={heatmapData} />}
-        </div>
+      {!accessDenied && (
+        <>
+          <div className="grid grid-cols-3 gap-6">
+            <div className="col-span-2 bg-white rounded-xl p-5 border border-slate-200">
+              <h2 className="text-slate-900 font-semibold mb-4">Peak Hours Heatmap (Last 7 Days)</h2>
+              {analyticsLoading ? <SkeletonBlock h="h-64" /> : <PeakHoursHeatmap heatmapData={heatmapData} />}
+            </div>
 
-        <div className="col-span-1 bg-white rounded-xl p-5 border border-slate-200">
-          <h2 className="text-slate-900 font-semibold mb-1">Plan Mix</h2>
-          <p className="text-slate-400 text-xs mb-3">Active memberships at this location</p>
-          {analyticsLoading ? <SkeletonBlock h="h-40" /> : <RatioDonut ratioData={ratioData} />}
-        </div>
-      </div>
+            <div className="col-span-1 bg-white rounded-xl p-5 border border-slate-200">
+              <h2 className="text-slate-900 font-semibold mb-1">Plan Mix</h2>
+              <p className="text-slate-400 text-xs mb-3">Active memberships at this location</p>
+              {analyticsLoading ? <SkeletonBlock h="h-40" /> : <RatioDonut ratioData={ratioData} />}
+            </div>
+          </div>
 
-      <div className="bg-white rounded-xl p-5 border border-slate-200">
-        <h2 className="text-slate-900 font-semibold mb-4">Daily Revenue (₹)</h2>
-        {analyticsLoading ? <SkeletonBlock h="h-52" /> : <RevenueChart revenueData={revenueData} />}
-      </div>
+          <div className="bg-white rounded-xl p-5 border border-slate-200">
+            <h2 className="text-slate-900 font-semibold mb-4">Daily Revenue (₹)</h2>
+            {analyticsLoading ? <SkeletonBlock h="h-52" /> : <RevenueChart revenueData={revenueData} />}
+          </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl p-5 border border-slate-200">
-          <h2 className="text-slate-900 font-semibold mb-3">Churn Risk Members</h2>
-          {analyticsLoading ? <SkeletonBlock h="h-48" /> : <ChurnPanel churnRisk={churnRisk} />}
-        </div>
+          <div className={`grid gap-6 ${user?.role !== 'frontdesk' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <div className="bg-white rounded-xl p-5 border border-slate-200">
+              <h2 className="text-slate-900 font-semibold mb-3">Churn Risk Members</h2>
+              {analyticsLoading ? <SkeletonBlock h="h-48" /> : <ChurnPanel churnRisk={churnRisk} />}
+            </div>
 
-        <div className="bg-white rounded-xl p-5 border border-slate-200">
-          <h2 className="text-slate-900 font-semibold mb-3">Cross-Location Revenue (Last 30 Days)</h2>
-          <CrossLocationChart data={crossLocationData} loading={crossLocationLoading} error={crossLocationError} />
-        </div>
-      </div>
+            {user?.role !== 'frontdesk' && (
+              <div className="bg-white rounded-xl p-5 border border-slate-200">
+                <h2 className="text-slate-900 font-semibold mb-3">Cross-Location Revenue (Last 30 Days)</h2>
+                <CrossLocationChart data={crossLocationData} loading={crossLocationLoading} error={crossLocationError} />
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

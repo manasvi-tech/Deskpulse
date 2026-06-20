@@ -1,6 +1,14 @@
 import { create } from 'zustand'
 
 const useStore = create((set) => ({
+  // ── Auth ──────────────────────────────────────────────────────────────────────
+  user: null,
+  isAuthenticated: false,
+  authLoading: true,
+  setUser: (user) => set({ user, isAuthenticated: !!user, authLoading: false }),
+  clearUser: () => set({ user: null, isAuthenticated: false, authLoading: false }),
+  setAuthLoading: (v) => set({ authLoading: v }),
+
   // ── WebSocket ────────────────────────────────────────────────────────────────
   wsConnected: false,
   setWsConnected: (connected) => set({ wsConnected: connected }),
@@ -72,6 +80,10 @@ const useStore = create((set) => ({
     set((state) => ({
       activityFeed: [event, ...state.activityFeed].slice(0, 20),
     })),
+
+  // ── Sidebar ───────────────────────────────────────────────────────────────────
+  sidebarExpanded: false,
+  toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
 
   // ── Simulator ─────────────────────────────────────────────────────────────────
   simulatorStatus: 'stopped',

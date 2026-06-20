@@ -1,8 +1,6 @@
 import { useEffect } from 'react'
 import useStore from '../store/useStore'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
 function toLocationArray(raw) {
   if (Array.isArray(raw)) return raw
   if (raw && Array.isArray(raw.locations)) return raw.locations
@@ -20,7 +18,7 @@ export function useLocationData() {
 
     async function fetchLocations() {
       try {
-        const res = await fetch(`${API_BASE}/api/locations`)
+        const res = await fetch('/api/locations', { credentials: 'include' })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const raw = await res.json()
         if (!cancelled) setLocations(toLocationArray(raw))
@@ -35,13 +33,13 @@ export function useLocationData() {
 }
 
 export async function fetchLocationAnalytics(locationId, dateRange = '30d') {
-  const res = await fetch(`${API_BASE}/api/locations/${locationId}/analytics?dateRange=${dateRange}`)
+  const res = await fetch(`/api/locations/${locationId}/analytics?dateRange=${dateRange}`, { credentials: 'include' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function fetchCrossLocation() {
-  const res = await fetch(`${API_BASE}/api/analytics/cross-location`)
+  const res = await fetch('/api/analytics/cross-location', { credentials: 'include' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const raw = await res.json()
   if (Array.isArray(raw)) return raw
