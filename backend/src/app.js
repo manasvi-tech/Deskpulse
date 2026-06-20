@@ -117,6 +117,13 @@ async function start() {
     console.error('[app] DB check / seed failed:', err.message);
   }
 
+  try {
+    await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY location_hourly_stats');
+    console.log('[mv] location_hourly_stats refreshed on startup');
+  } catch (err) {
+    console.error('[mv] Failed to refresh location_hourly_stats:', err.message);
+  }
+
   // Attach WebSocket server to the HTTP server
   const { initWebSocket } = require('./websocket/server');
   initWebSocket(server);

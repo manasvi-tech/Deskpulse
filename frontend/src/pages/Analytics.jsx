@@ -370,26 +370,9 @@ export default function Analytics() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Analytics</h1>
-          {selectedLocation && <p className="text-slate-500 text-sm mt-0.5">{selectedLocation.name}</p>}
-        </div>
-        <div className="flex gap-2">
-          {['7d', '30d', '90d'].map((r) => (
-            <button
-              key={r}
-              onClick={() => setDateRange(r)}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                dateRange === r
-                  ? 'bg-sky-500 text-white'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Analytics</h1>
+        {selectedLocation && <p className="text-slate-500 text-sm mt-0.5">{selectedLocation.name}</p>}
       </div>
 
       {accessDenied && (
@@ -412,6 +395,25 @@ export default function Analytics() {
               <h2 className="text-slate-900 font-semibold mb-1">Plan Mix</h2>
               <p className="text-slate-400 text-xs mb-3">Active memberships at this location</p>
               {analyticsLoading ? <SkeletonBlock h="h-40" /> : <RatioDonut ratioData={ratioData} />}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">Revenue date range</span>
+            <div className="flex gap-2">
+              {['7d', '30d', '90d'].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setDateRange(r)}
+                  className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    dateRange === r
+                      ? 'bg-sky-500 text-white'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
             </div>
           </div>
 
