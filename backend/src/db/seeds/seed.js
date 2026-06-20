@@ -1,14 +1,21 @@
 'use strict';
 
 /**
- * DeskPulse Seed Script — Part 1
- * Seeds: locations, resources, companies, members, memberships, payments.
- * Run:   node seed.js  (or called from app.js startup when locations table is empty)
- * DB:    process.env.DATABASE_URL  ||  postgres://deskpulse:deskpulse_secret@db:5432/deskpulse
+ * DeskPulse Seed Script
+ *
+ * Philosophy (3 layers):
+ *   Layer 1 — Historical (90 days of CLOSED sessions, all checked_out set)
+ *   Layer 2 — Today clean (zero open check-ins except forced anomaly scenarios)
+ *   Layer 3 — Simulator takes over from today onwards
+ *
+ * Insert order (strict FK order):
+ *   locations → resources → companies → members → memberships →
+ *   users → payments → checkins → bookings → anomaly scenarios
  */
 
 const { Pool }       = require('pg');
 const { randomUUID } = require('crypto');
+const bcrypt         = require('bcryptjs');
 
 const DB_URL = process.env.DATABASE_URL
   || 'postgres://deskpulse:deskpulse_secret@db:5432/deskpulse';
@@ -36,16 +43,16 @@ const LAST = [
 
 // ── Location definitions ──────────────────────────────────────────────────────
 const LOCS = [
-  { key:'awfis_kora',     name:'Awfis - Koramangala',             city:'Bengaluru', address:'Koramangala, Bengaluru',          opens:'08:00', closes:'22:00', hot:60, ded:30, priv:8,  mtg:4, count:180 },
-  { key:'awfis_indir',    name:'Awfis - Indiranagar',             city:'Bengaluru', address:'Indiranagar, Bengaluru',          opens:'08:00', closes:'22:00', hot:45, ded:20, priv:6,  mtg:3, count:140 },
-  { key:'cowrks_bandra',  name:'CoWrks - Bandra West',            city:'Mumbai',    address:'Bandra West, Mumbai',             opens:'07:00', closes:'23:00', hot:80, ded:40, priv:12, mtg:6, count:220 },
-  { key:'cowrks_powai',   name:'CoWrks - Powai',                  city:'Mumbai',    address:'Powai, Mumbai',                   opens:'07:30', closes:'22:30', hot:65, ded:30, priv:10, mtg:4, count:180 },
-  { key:'innov8_cp',      name:'Innov8 - Connaught Place',        city:'New Delhi', address:'Connaught Place, New Delhi',      opens:'08:00', closes:'22:00', hot:55, ded:25, priv:8,  mtg:4, count:160 },
-  { key:'innov8_lajpat',  name:'Innov8 - Lajpat Nagar',           city:'New Delhi', address:'Lajpat Nagar, New Delhi',         opens:'08:00', closes:'21:30', hot:40, ded:20, priv:6,  mtg:3, count:120 },
-  { key:'spring_banjara', name:'91Springboard - Banjara Hills',   city:'Hyderabad', address:'Banjara Hills, Hyderabad',        opens:'08:00', closes:'22:00', hot:50, ded:25, priv:8,  mtg:3, count:150 },
-  { key:'spring_noida',   name:'91Springboard - Sector 18 Noida', city:'Noida',     address:'Sector 18, Noida',                opens:'08:00', closes:'21:30', hot:35, ded:15, priv:5,  mtg:2, count:110 },
-  { key:'bhive_salt',     name:'BHive - Salt Lake',               city:'Kolkata',   address:'Salt Lake, Kolkata',              opens:'08:00', closes:'21:00', hot:30, ded:12, priv:4,  mtg:2, count:130 },
-  { key:'bhive_vel',      name:'BHIVE - Velachery',               city:'Chennai',   address:'Velachery, Chennai',              opens:'08:00', closes:'21:00', hot:25, ded:10, priv:3,  mtg:2, count:110 },
+  { key:'awfis_kora',     name:'Awfis - Koramangala',             city:'Bengaluru', address:'Koramangala, Bengaluru',     opens:'08:00', closes:'22:00', hot:60, ded:30, priv:8,  mtg:4, count:180 },
+  { key:'awfis_indir',    name:'Awfis - Indiranagar',             city:'Bengaluru', address:'Indiranagar, Bengaluru',     opens:'08:00', closes:'22:00', hot:45, ded:20, priv:6,  mtg:3, count:140 },
+  { key:'cowrks_bandra',  name:'CoWrks - Bandra West',            city:'Mumbai',    address:'Bandra West, Mumbai',        opens:'07:00', closes:'23:00', hot:80, ded:40, priv:12, mtg:6, count:220 },
+  { key:'cowrks_powai',   name:'CoWrks - Powai',                  city:'Mumbai',    address:'Powai, Mumbai',              opens:'07:30', closes:'22:30', hot:65, ded:30, priv:10, mtg:4, count:180 },
+  { key:'innov8_cp',      name:'Innov8 - Connaught Place',        city:'New Delhi', address:'Connaught Place, New Delhi', opens:'08:00', closes:'22:00', hot:55, ded:25, priv:8,  mtg:4, count:160 },
+  { key:'innov8_lajpat',  name:'Innov8 - Lajpat Nagar',           city:'New Delhi', address:'Lajpat Nagar, New Delhi',   opens:'08:00', closes:'21:30', hot:40, ded:20, priv:6,  mtg:3, count:120 },
+  { key:'spring_banjara', name:'91Springboard - Banjara Hills',   city:'Hyderabad', address:'Banjara Hills, Hyderabad',  opens:'08:00', closes:'22:00', hot:50, ded:25, priv:8,  mtg:3, count:150 },
+  { key:'spring_noida',   name:'91Springboard - Sector 18 Noida', city:'Noida',     address:'Sector 18, Noida',          opens:'08:00', closes:'21:30', hot:35, ded:15, priv:5,  mtg:2, count:110 },
+  { key:'bhive_salt',     name:'BHive - Salt Lake',               city:'Kolkata',   address:'Salt Lake, Kolkata',         opens:'08:00', closes:'21:00', hot:30, ded:12, priv:4,  mtg:2, count:130 },
+  { key:'bhive_vel',      name:'BHIVE - Velachery',               city:'Chennai',   address:'Velachery, Chennai',         opens:'08:00', closes:'21:00', hot:25, ded:10, priv:3,  mtg:2, count:110 },
 ];
 
 // ── Company definitions ───────────────────────────────────────────────────────
@@ -62,27 +69,43 @@ const CO_DEFS = [
 
 // ── Plan config ───────────────────────────────────────────────────────────────
 const PLAN_AMOUNT   = { day_pass: 499, hot_desk: 3999, dedicated_desk: 7999, private_office: 24999 };
-const PLAN_DURATION = { day_pass: 30,  hot_desk: 30,   dedicated_desk: 90,   private_office: 365   };
+const PLAN_DURATION = { day_pass: 1,   hot_desk: 30,   dedicated_desk: 90,   private_office: 365   };
+
+// ── Staff users ───────────────────────────────────────────────────────────────
+const USERS = [
+  { name:'Arjun Mehta',      email:'admin@deskpulse.io',                password:'demo1234', role:'super_admin', locationName:null },
+  { name:'Priya Sharma',     email:'staff.koramangala@deskpulse.io',    password:'demo1234', role:'frontdesk',   locationName:'Awfis - Koramangala' },
+  { name:'Rahul Verma',      email:'staff.indiranagar@deskpulse.io',    password:'demo1234', role:'frontdesk',   locationName:'Awfis - Indiranagar' },
+  { name:'Neha Patel',       email:'staff.bandrawest@deskpulse.io',     password:'demo1234', role:'frontdesk',   locationName:'CoWrks - Bandra West' },
+  { name:'Vikram Singh',     email:'staff.powai@deskpulse.io',          password:'demo1234', role:'frontdesk',   locationName:'CoWrks - Powai' },
+  { name:'Ananya Krishnan',  email:'staff.connaughtplace@deskpulse.io', password:'demo1234', role:'frontdesk',   locationName:'Innov8 - Connaught Place' },
+  { name:'Rohan Gupta',      email:'staff.lajpatnagar@deskpulse.io',    password:'demo1234', role:'frontdesk',   locationName:'Innov8 - Lajpat Nagar' },
+  { name:'Sneha Reddy',      email:'staff.banjarahills@deskpulse.io',   password:'demo1234', role:'frontdesk',   locationName:'91Springboard - Banjara Hills' },
+  { name:'Amit Joshi',       email:'staff.noida@deskpulse.io',          password:'demo1234', role:'frontdesk',   locationName:'91Springboard - Sector 18 Noida' },
+  { name:'Kavya Nair',       email:'staff.saltlake@deskpulse.io',       password:'demo1234', role:'frontdesk',   locationName:'BHive - Salt Lake' },
+  { name:'Deepak Iyer',      email:'staff.velachery@deskpulse.io',      password:'demo1234', role:'frontdesk',   locationName:'BHIVE - Velachery' },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const ri      = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick    = arr => arr[ri(0, arr.length - 1)];
-const addDays = (d, n)  => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
-const subDays = (d, n)  => addDays(d, -n);
+const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+const subDays = (d, n) => addDays(d, -n);
 
 function genPhone() {
-  return pick(['9', '8', '7']) + String(ri(100000000, 999999999));
+  return pick(['9','8','7']) + String(ri(100000000, 999999999));
 }
 
 const usedEmails = new Set();
 function genEmail(first, last) {
   const base = `${first.toLowerCase()}.${last.toLowerCase()}`;
   let e;
-  do { e = `${base}+${ri(1000, 9999)}@gmail.com`; } while (usedEmails.has(e));
+  do { e = `${base}+${ri(1000,9999)}@gmail.com`; } while (usedEmails.has(e));
   usedEmails.add(e);
   return e;
 }
 
+// Distribution: hot_desk 50%, dedicated_desk 25%, private_office 10%, day_pass 15%
 function pickPlan() {
   const r = Math.random();
   if (r < 0.15) return 'day_pass';
@@ -92,7 +115,6 @@ function pickPlan() {
 }
 
 // ── Generic batch insert ──────────────────────────────────────────────────────
-// db can be a Pool or PoolClient (both expose .query())
 async function batchInsert(db, table, cols, rows, conflictStr = 'ON CONFLICT DO NOTHING', batchSize = 500) {
   for (let start = 0; start < rows.length; start += batchSize) {
     const batch = rows.slice(start, start + batchSize);
@@ -113,31 +135,23 @@ async function seed() {
   const pool = new Pool({ connectionString: DB_URL, max: 3 });
 
   try {
-    // Idempotency: bail early if locations already seeded
     const { rows: chk } = await pool.query('SELECT COUNT(*)::int AS n FROM locations');
     if (chk[0].n >= 10) {
       console.log('[seed] Already seeded — skipping');
       return;
     }
 
-    const now = new Date();
+    const now   = new Date();
+    const today = new Date(now); today.setHours(0, 0, 0, 0);
 
-    // ── 1. LOCATIONS ──────────────────────────────────────────────────────────
+    // ── SECTION 1: LOCATIONS ─────────────────────────────────────────────────
     console.log('[seed] Seeding locations...');
     const locRows = LOCS.map(def => ({
-      id:                    randomUUID(),
-      name:                  def.name,
-      city:                  def.city,
-      address:               def.address,
-      total_hot_desks:       def.hot,
-      total_dedicated_desks: def.ded,
-      total_private_offices: def.priv,
-      total_meeting_rooms:   def.mtg,
-      opens_at:              def.opens,
-      closes_at:             def.closes,
-      status:                'active',
-      created_at:            now,
-      updated_at:            now,
+      id: randomUUID(), name: def.name, city: def.city, address: def.address,
+      total_hot_desks: def.hot, total_dedicated_desks: def.ded,
+      total_private_offices: def.priv, total_meeting_rooms: def.mtg,
+      opens_at: def.opens, closes_at: def.closes,
+      status: 'active', created_at: now, updated_at: now,
     }));
     await batchInsert(pool, 'locations',
       ['id','name','city','address','total_hot_desks','total_dedicated_desks',
@@ -145,63 +159,64 @@ async function seed() {
        'status','created_at','updated_at'],
       locRows
     );
-    // Build key → { id, ...def } lookup
     const locMap = Object.fromEntries(LOCS.map((def, i) => [def.key, { ...def, id: locRows[i].id }]));
     console.log('[seed] Seeding locations... done (10)');
 
-    // ── 2. RESOURCES ──────────────────────────────────────────────────────────
+    // ── SECTION 2: RESOURCES ─────────────────────────────────────────────────
     console.log('[seed] Seeding resources...');
     const resRows = [];
     for (const def of LOCS) {
       const locId = locMap[def.key].id;
-
       for (let i = 0; i < def.hot; i++) {
         const letter = String.fromCharCode(65 + Math.floor(i / 9));
         const num    = (i % 9) + 1;
-        resRows.push({ id: randomUUID(), location_id: locId, type: 'hot_desk',       name: `Hot Desk ${letter}${num}`, capacity: 1,           status: 'available' });
+        resRows.push({ id: randomUUID(), location_id: locId, type: 'hot_desk',      name: `Hot Desk ${letter}${num}`, capacity: 1,          status: 'available' });
       }
-      for (let i = 1; i <= def.ded;  i++) resRows.push({ id: randomUUID(), location_id: locId, type: 'dedicated_desk',  name: `Dedicated Desk ${i}`,  capacity: 1,           status: 'available' });
-      for (let i = 1; i <= def.priv; i++) resRows.push({ id: randomUUID(), location_id: locId, type: 'private_office',  name: `Private Office ${i}`,  capacity: 1,           status: 'available' });
-      for (let i = 1; i <= def.mtg;  i++) resRows.push({ id: randomUUID(), location_id: locId, type: 'meeting_room',    name: `Meeting Room ${i}`,    capacity: ri(4, 10),   status: 'available' });
+      for (let i = 1; i <= def.ded;  i++) resRows.push({ id: randomUUID(), location_id: locId, type: 'dedicated_desk', name: `Dedicated Desk ${i}`, capacity: 1,          status: 'available' });
+      for (let i = 1; i <= def.priv; i++) resRows.push({ id: randomUUID(), location_id: locId, type: 'private_office', name: `Private Office ${i}`, capacity: 1,          status: 'available' });
+      for (let i = 1; i <= def.mtg;  i++) resRows.push({ id: randomUUID(), location_id: locId, type: 'meeting_room',   name: `Meeting Room ${i}`,   capacity: ri(4, 10),  status: 'available' });
     }
     await batchInsert(pool, 'resources', ['id','location_id','type','name','capacity','status'], resRows);
     console.log(`[seed] Seeding resources... done (${resRows.length})`);
 
-    // ── 3. COMPANIES ──────────────────────────────────────────────────────────
+    // Build in-memory lookup: location_id → meeting room ids
+    const roomsByLoc = {};
+    for (const r of resRows) {
+      if (r.type !== 'meeting_room') continue;
+      (roomsByLoc[r.location_id] = roomsByLoc[r.location_id] || []).push(r.id);
+    }
+
+    // ── SECTION 3: COMPANIES ─────────────────────────────────────────────────
     console.log('[seed] Seeding companies...');
     const coRows = CO_DEFS.map(def => ({
-      id:            randomUUID(),
-      name:          def.name,
-      contact_name:  def.contactName,
-      contact_email: def.contactEmail,
-      contact_phone: def.contactPhone,
-      location_id:   locMap[def.locKey].id,
-      created_at:    now,
+      id: randomUUID(), name: def.name, contact_name: def.contactName,
+      contact_email: def.contactEmail, contact_phone: def.contactPhone,
+      location_id: locMap[def.locKey].id, created_at: now,
     }));
     await batchInsert(pool, 'companies',
       ['id','name','contact_name','contact_email','contact_phone','location_id','created_at'],
       coRows
     );
-    // locKey → company id  (only 8 locations have a company)
     const coMap = Object.fromEntries(CO_DEFS.map((def, i) => [def.locKey, coRows[i].id]));
     console.log('[seed] Seeding companies... done (8)');
 
-    // ── 4. MEMBERS ────────────────────────────────────────────────────────────
-    console.log('[seed] Seeding 1500 members...');
+    // ── SECTION 4: MEMBERS ───────────────────────────────────────────────────
+    console.log('[seed] Seeding members...');
     const memberRows = [];
-    const memberMeta = []; // parallel: { status, isExpiringSoon, locationId }
+    const memberMeta = []; // parallel array: { status, isExpiringSoon, isChurnInactive, locationId }
 
     for (const def of LOCS) {
-      const locId   = locMap[def.key].id;
-      const coId    = coMap[def.key] || null;
-      const n       = def.count;
+      const locId = locMap[def.key].id;
+      const coId  = coMap[def.key] || null;
+      const n     = def.count;
 
-      const nExpiring = 8;                          // 8 per location = 80 expiring-soon total
-      const nInactive = Math.floor(n * 0.10);
-      const nFrozen   = Math.floor(n * 0.05);
-      const nActive   = n - nInactive - nFrozen;
+      // Per location: 2 expiring-soon, 4 churn-inactive, rest normal active/inactive/frozen
+      const nExpiring      = 2;
+      const nChurnInactive = 4;
+      const nInactive      = Math.round(n * 0.10);
+      const nFrozen        = Math.round(n * 0.05);
+      const nActive        = n - nInactive - nFrozen;
 
-      // Status ordering: active first (so we flag first 8 as expiring-soon), then inactive, then frozen
       const statuses = [
         ...Array(nActive).fill('active'),
         ...Array(nInactive).fill('inactive'),
@@ -213,23 +228,19 @@ async function seed() {
         const first  = pick(FIRST);
         const last   = pick(LAST);
         const status = statuses[i];
-        const isExpiringSoon = status === 'active' && activeSeen < nExpiring;
+
+        const isExpiringSoon   = status === 'active' && activeSeen < nExpiring;
+        const isChurnInactive  = status === 'active' && activeSeen >= nExpiring && activeSeen < nExpiring + nChurnInactive;
         if (status === 'active') activeSeen++;
 
-        // 20% of members at a location belong to the company there (if one exists)
         const company_id = (coId && Math.random() < 0.20) ? coId : null;
 
         memberRows.push({
-          id:          randomUUID(),
-          company_id,
-          location_id: locId,
-          name:        `${first} ${last}`,
-          email:       genEmail(first, last),
-          phone:       genPhone(),
-          status,
-          created_at:  now,
+          id: randomUUID(), company_id, location_id: locId,
+          name: `${first} ${last}`, email: genEmail(first, last),
+          phone: genPhone(), status, created_at: now,
         });
-        memberMeta.push({ status, isExpiringSoon, locationId: locId });
+        memberMeta.push({ status, isExpiringSoon, isChurnInactive, locationId: locId });
       }
     }
 
@@ -238,97 +249,96 @@ async function seed() {
       memberRows,
       'ON CONFLICT (email) DO NOTHING'
     );
-    console.log('[seed] Seeding 1500 members... done');
+    console.log('[seed] Seeding members... done (1500)');
 
-    // ── 5. MEMBERSHIPS ────────────────────────────────────────────────────────
+    // ── SECTION 5: MEMBERSHIPS ───────────────────────────────────────────────
     console.log('[seed] Seeding memberships...');
-    const membershipRows  = [];
-    // memberId → [{ id, plan, startDate, memberType }]  — needed for payments
-    const memberMsMap = {};
+    const membershipRows = [];
+    const memberMsMap    = {};
 
     for (let mi = 0; mi < memberRows.length; mi++) {
       const m    = memberRows[mi];
       const meta = memberMeta[mi];
 
-      const isRenewal = meta.status === 'active' && Math.random() < 0.25;
-      const plan      = meta.isExpiringSoon ? 'hot_desk' : pickPlan();
-      const dur       = PLAN_DURATION[plan];
+      // 25% of regular active members are renewals (not expiring-soon, not churn-inactive)
+      const isRenewal = meta.status === 'active'
+        && !meta.isExpiringSoon
+        && !meta.isChurnInactive
+        && Math.random() < 0.25;
 
-      let startDate, endDate, msStatus;
+      let plan, startDate, endDate, msStatus;
 
       if (meta.isExpiringSoon) {
-        // end_date lands 1–6 days from now so the expiring-soon query catches it
+        // Membership expires 1-6 days from now
+        plan      = 'hot_desk';
         endDate   = addDays(now, ri(1, 6));
-        startDate = subDays(endDate, dur);
+        startDate = subDays(endDate, PLAN_DURATION.hot_desk); // 24-29 days ago
+        msStatus  = 'active';
+
+      } else if (meta.isChurnInactive) {
+        // Active membership, no recent check-ins → churn risk "inactive" tier
+        // Use 90-day plan so end_date stays far in the future (active)
+        plan      = 'dedicated_desk';
+        startDate = subDays(now, 50);                          // 50 days ago
+        endDate   = addDays(startDate, PLAN_DURATION.dedicated_desk); // 40 days from now
         msStatus  = 'active';
 
       } else if (meta.status === 'inactive') {
+        plan      = pickPlan();
         startDate = subDays(now, ri(91, 180));
-        endDate   = addDays(startDate, dur);
+        endDate   = addDays(startDate, PLAN_DURATION[plan]);
         msStatus  = 'expired';
 
       } else if (meta.status === 'frozen') {
-        startDate = subDays(now, ri(30, 90));
-        endDate   = addDays(startDate, dur);
+        plan      = pickPlan();
+        // Keep start_date ≥10 days ago so paid_at never falls in revenue_drop window [7d,6d)
+        startDate = subDays(now, ri(10, 89));
+        if (startDate >= subDays(now, 8) && startDate <= subDays(now, 6)) {
+          startDate = subDays(now, 10);
+        }
+        endDate   = addDays(startDate, PLAN_DURATION[plan]);
         msStatus  = 'paused';
 
       } else {
-        // Regular active: keep end_date at least 8 days out so it doesn't
-        // accidentally fall in the expiring-soon window
-        const minAgo = 8;
-        const maxAgo = Math.min(dur - 8, 89);
-        startDate = subDays(now, ri(minAgo, Math.max(minAgo + 1, maxAgo)));
-        endDate   = addDays(startDate, dur);
+        // Regular active member
+        plan      = pickPlan();
+        // Keep start_date ≥10 days ago — prevents paid_at landing in [7d,6d) revenue_drop window
+        startDate = subDays(now, ri(10, 89));
+        if (startDate >= subDays(now, 8) && startDate <= subDays(now, 6)) {
+          startDate = subDays(now, 10);
+        }
+        endDate   = addDays(startDate, PLAN_DURATION[plan]);
         msStatus  = 'active';
       }
 
       memberMsMap[m.id] = [];
 
       if (isRenewal) {
-        // Original membership (expired before the current one)
+        const dur      = PLAN_DURATION[plan];
         const origStart = subDays(startDate, dur + ri(1, 30));
         const origEnd   = addDays(origStart, dur);
         const origId    = randomUUID();
         membershipRows.push({
-          id:          origId,
-          member_id:   m.id,
-          location_id: m.location_id,
-          plan_type:   plan,
-          start_date:  origStart,
-          end_date:    origEnd,
-          status:      'expired',
-          member_type: 'new',
-          created_at:  origStart,
+          id: origId, member_id: m.id, location_id: m.location_id,
+          plan_type: plan, start_date: origStart, end_date: origEnd,
+          status: 'expired', member_type: 'new', created_at: origStart,
         });
         memberMsMap[m.id].push({ id: origId, plan, startDate: origStart, memberType: 'new' });
 
-        // Current renewal membership
         const renewId = randomUUID();
         membershipRows.push({
-          id:          renewId,
-          member_id:   m.id,
-          location_id: m.location_id,
-          plan_type:   plan,
-          start_date:  startDate,
-          end_date:    endDate,
-          status:      msStatus,
-          member_type: 'renewal',
-          created_at:  startDate,
+          id: renewId, member_id: m.id, location_id: m.location_id,
+          plan_type: plan, start_date: startDate, end_date: endDate,
+          status: msStatus, member_type: 'renewal', created_at: startDate,
         });
         memberMsMap[m.id].push({ id: renewId, plan, startDate, memberType: 'renewal' });
 
       } else {
         const msId = randomUUID();
         membershipRows.push({
-          id:          msId,
-          member_id:   m.id,
-          location_id: m.location_id,
-          plan_type:   plan,
-          start_date:  startDate,
-          end_date:    endDate,
-          status:      msStatus,
-          member_type: 'new',
-          created_at:  startDate,
+          id: msId, member_id: m.id, location_id: m.location_id,
+          plan_type: plan, start_date: startDate, end_date: endDate,
+          status: msStatus, member_type: 'new', created_at: startDate,
         });
         memberMsMap[m.id].push({ id: msId, plan, startDate, memberType: 'new' });
       }
@@ -340,26 +350,42 @@ async function seed() {
     );
     console.log(`[seed] Seeding memberships... done (${membershipRows.length})`);
 
-    // ── 6. PAYMENTS ───────────────────────────────────────────────────────────
-    console.log('[seed] Seeding payments...');
+    // ── SECTION 6: USERS ─────────────────────────────────────────────────────
+    console.log('[seed] Seeding users...');
+    const locByName = Object.fromEntries(locRows.map(r => [r.name, r.id]));
+
+    for (const u of USERS) {
+      const passwordHash = await bcrypt.hash(u.password, 12);
+      const locationId   = u.locationName ? (locByName[u.locationName] ?? null) : null;
+      if (u.locationName && !locationId) {
+        console.warn(`[seed] Warning: location not found for "${u.locationName}" — ${u.email} gets NULL location_id`);
+      }
+      await pool.query(
+        `INSERT INTO users (email, password_hash, role, location_id, name)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (email) DO NOTHING`,
+        [u.email, passwordHash, u.role, locationId, u.name]
+      );
+    }
+    console.log(`[seed] Seeding users... done (${USERS.length})`);
+
+    // ── SECTION 7: HISTORICAL PAYMENTS ───────────────────────────────────────
+    // All paid_at < today. No payments on or after CURRENT_DATE.
+    // start_dates were constrained to ≥10 days ago so paid_at ≠ the revenue_drop window.
+    console.log('[seed] Seeding historical payments...');
     const paymentRows = [];
 
     for (const m of memberRows) {
       for (const ms of (memberMsMap[m.id] || [])) {
-        // paid_at = membership start_date ± 5 minutes, never in the future
-        const jitter  = ri(-5, 5) * 60 * 1000; // ms
-        const rawPaid = new Date(ms.startDate.getTime() + jitter);
-        const paid_at = rawPaid > now ? now : rawPaid;
+        const jitter = ri(-5, 5) * 60 * 1000;
+        let paidAt   = new Date(ms.startDate.getTime() + jitter);
+        if (paidAt >= today) paidAt = new Date(today.getTime() - 3600000); // push to yesterday
+        if (paidAt > now)    paidAt = new Date(now.getTime()  - 60000);
 
         paymentRows.push({
-          id:            randomUUID(),
-          member_id:     m.id,
-          membership_id: ms.id,
-          location_id:   m.location_id,
-          amount:        PLAN_AMOUNT[ms.plan],
-          payment_type:  ms.memberType,
-          paid_at,
-          notes:         null,
+          id: randomUUID(), member_id: m.id, membership_id: ms.id,
+          location_id: m.location_id, amount: PLAN_AMOUNT[ms.plan],
+          payment_type: ms.memberType, paid_at: paidAt, notes: null,
         });
       }
     }
@@ -368,19 +394,18 @@ async function seed() {
       ['id','member_id','membership_id','location_id','amount','payment_type','paid_at','notes'],
       paymentRows
     );
-    console.log(`[seed] Seeding payments... done (${paymentRows.length})`);
+    console.log(`[seed] Seeding historical payments... done (${paymentRows.length})`);
 
-    // ── 7. CHECK-INS ──────────────────────────────────────────────────────────
-    console.log('[seed] Seeding check-ins (historical, ~80k records)...');
+    // ── SECTION 8: HISTORICAL CHECK-INS ──────────────────────────────────────
+    // Upper bound: NOW() - 3 hours → guarantees no check-in is within 2h window.
+    // All checked_out set — Layer 1 is entirely closed sessions.
+    console.log('[seed] Seeding historical check-ins...');
 
-    // Per 3-minute slot: prob = hour_weight × dow_weight × DENSITY
-    // Calibrated so each location gets ~8,000 historical check-ins over 90 days.
-    const DENSITY = 0.72;
+    const DENSITY = 0.85;
     let totalCheckins = 0;
 
     for (const def of LOCS) {
       const locId = locMap[def.key].id;
-
       const { rowCount } = await pool.query(`
         INSERT INTO checkins (member_id, location_id, checked_in, checked_out)
         WITH
@@ -389,11 +414,9 @@ async function seed() {
           FROM members WHERE location_id = $1 AND status = 'active'
         ),
         s AS (
-          SELECT
-            gs         AS ts,
-            EXTRACT(HOUR   FROM gs)::int AS h,
-            EXTRACT(MINUTE FROM gs)::int AS mn,
-            EXTRACT(DOW    FROM gs)::int AS dow
+          SELECT gs AS ts,
+                 EXTRACT(HOUR FROM gs)::int AS h,
+                 EXTRACT(DOW  FROM gs)::int AS dow
           FROM generate_series(
             NOW() - INTERVAL '90 days',
             NOW() - INTERVAL '3 hours',
@@ -403,19 +426,19 @@ async function seed() {
         p AS (
           SELECT ts, m.ids,
             (CASE
-              WHEN h = 7 AND mn >= 30 THEN 0.50
-              WHEN h = 8              THEN 0.50
+              WHEN h BETWEEN 0  AND 7  THEN 0.00
+              WHEN h = 8               THEN 0.40
               WHEN h BETWEEN 9  AND 11 THEN 1.00
-              WHEN h BETWEEN 12 AND 13 THEN 0.40
-              WHEN h BETWEEN 14 AND 16 THEN 0.25
-              WHEN h BETWEEN 17 AND 19 THEN 0.80
-              WHEN h BETWEEN 20 AND 21 THEN 0.30
-              ELSE 0.0
+              WHEN h BETWEEN 12 AND 13 THEN 0.50
+              WHEN h BETWEEN 14 AND 17 THEN 0.90
+              WHEN h BETWEEN 18 AND 19 THEN 0.40
+              WHEN h BETWEEN 20 AND 22 THEN 0.15
+              ELSE 0.00
             END) *
             (CASE dow
-              WHEN 1 THEN 1.00 WHEN 2 THEN 0.95 WHEN 3 THEN 0.90
-              WHEN 4 THEN 0.95 WHEN 5 THEN 0.80 WHEN 6 THEN 0.50
-              WHEN 0 THEN 0.20 ELSE 0.0
+              WHEN 0 THEN 0.20 WHEN 1 THEN 0.85 WHEN 2 THEN 0.95
+              WHEN 3 THEN 1.00 WHEN 4 THEN 0.95 WHEN 5 THEN 0.80
+              WHEN 6 THEN 0.40 ELSE 0.00
             END) AS w
           FROM s CROSS JOIN m
         )
@@ -423,7 +446,10 @@ async function seed() {
           ids[(floor(random() * array_length(ids, 1)) + 1)::int],
           $1::uuid,
           ts,
-          ts + (random() * 360 + 120) * INTERVAL '1 minute'
+          LEAST(
+            ts + (random() * 360 + 120) * INTERVAL '1 minute',
+            NOW() - INTERVAL '5 minutes'
+          )
         FROM p
         WHERE w > 0 AND random() < w * $2::float AND ids IS NOT NULL
         ON CONFLICT DO NOTHING
@@ -432,141 +458,50 @@ async function seed() {
       totalCheckins += (rowCount || 0);
     }
 
-    console.log(`[seed] Historical check-ins inserted (${totalCheckins})`);
+    // Fix churn-inactive members: delete any recent check-ins, insert one 30-45 days ago.
+    // This guarantees the "inactive" churn-risk tier (last check-in >30 days ago).
+    const churnInactiveMembers = memberRows
+      .map((m, i) => memberMeta[i].isChurnInactive ? m : null)
+      .filter(Boolean);
 
-    // ── Pre-seeded open check-ins (checked_out = NULL) ────────────────────────
-    // Scenario A: bhive_vel — intentionally 0 open check-ins; most recent historical
-    //   check-in is ≥3 h before seed time → no_activity detector fires ✓
-    // Scenario B: cowrks_bandra — 120–128 open check-ins; capacity 80+40+12=132
-    //   → 91–97% → overbooking (critical) fires ✓
-    const OPEN_CI = [
-      { key: 'cowrks_bandra',  min: 120, max: 128 },
-      { key: 'cowrks_powai',   min: 20,  max: 25  },
-      { key: 'awfis_kora',     min: 15,  max: 20  },
-      { key: 'innov8_cp',      min: 12,  max: 18  },
-      { key: 'spring_banjara', min: 12,  max: 16  },
-      { key: 'awfis_indir',    min: 8,   max: 12  },
-      { key: 'innov8_lajpat',  min: 6,   max: 10  },
-      { key: 'spring_noida',   min: 6,   max: 10  },
-      { key: 'bhive_salt',     min: 6,   max: 10  },
-      // bhive_vel omitted — 0 open check-ins (Scenario A)
-    ];
-
-    for (const spec of OPEN_CI) {
-      const locId = locMap[spec.key].id;
-      const count = ri(spec.min, spec.max);
-
-      const { rows: ciMembers } = await pool.query(
-        `SELECT id FROM members
-         WHERE location_id = $1 AND status = 'active'
-         ORDER BY random() LIMIT $2`,
-        [locId, count]
+    for (const m of churnInactiveMembers) {
+      await pool.query(
+        `DELETE FROM checkins WHERE member_id = $1 AND checked_in >= NOW() - INTERVAL '30 days'`,
+        [m.id]
       );
-      if (ciMembers.length === 0) continue;
-
-      const openRows = ciMembers.map(m => ({
-        member_id:   m.id,
-        location_id: locId,
-        checked_in:  new Date(now.getTime() - ri(5, 89) * 60000),
-        checked_out: null,
-      }));
-
-      await batchInsert(pool, 'checkins',
-        ['member_id', 'location_id', 'checked_in', 'checked_out'],
-        openRows
+      const daysAgo = ri(30, 45);
+      const ciTime  = subDays(now, daysAgo);
+      ciTime.setHours(10, ri(0, 59), 0, 0);
+      const coTime  = new Date(ciTime.getTime() + ri(120, 480) * 60000);
+      await pool.query(
+        `INSERT INTO checkins (member_id, location_id, checked_in, checked_out)
+         VALUES ($1, $2, $3, $4)`,
+        [m.id, m.location_id, ciTime, coTime]
       );
-      totalCheckins += openRows.length;
+      totalCheckins++;
     }
 
-    console.log(`[seed] Seeding check-ins... done (~${totalCheckins} total, includes open)`);
+    console.log(`[seed] Seeding historical check-ins... done (~${totalCheckins} rows)`);
 
-    // Populate materialized view immediately after seeding check-ins
+    // Populate materialized view immediately
     await pool.query('REFRESH MATERIALIZED VIEW location_hourly_stats');
     console.log('[seed] Materialized view refreshed');
 
-    // ── 8. ANOMALY SCENARIOS ──────────────────────────────────────────────────
-    // Scenario A/B already ensured above via check-in counts.
-    // Scenario C — revenue_drop (BHive Salt Lake)
-    //   Last week same weekday: 8 × ₹7,999 = ₹63,992 (≥ ₹30,000 threshold)
-    //   Today: 1 × ₹499 → ratio ≈ 0.008 << 0.70 → revenue_drop fires ✓
-    console.log('[seed] Seeding anomaly scenarios C and D...');
+    // ── SECTION 9: HISTORICAL BOOKINGS ───────────────────────────────────────
+    // 60 days, all starts_at < CURRENT_DATE, 5-10 bookings per location per day.
+    console.log('[seed] Seeding historical bookings...');
 
-    {
-      const saltId = locMap['bhive_salt'].id;
-      const { rows: saltMs } = await pool.query(
-        `SELECT m.id AS mid, ms.id AS msid
-         FROM members m
-         JOIN memberships ms
-           ON ms.member_id = m.id AND ms.status IN ('active', 'expired')
-         WHERE m.location_id = $1 AND m.status = 'active'
-         ORDER BY random() LIMIT 10`,
-        [saltId]
-      );
-
-      if (saltMs.length >= 2) {
-        const scenCRows = [];
-        const lastWeek  = subDays(now, 7);
-        lastWeek.setHours(10, 0, 0, 0);
-
-        for (let i = 0; i < 8 && i < saltMs.length - 1; i++) {
-          scenCRows.push({
-            id:            randomUUID(),
-            member_id:     saltMs[i].mid,
-            membership_id: saltMs[i].msid,
-            location_id:   saltId,
-            amount:        7999,
-            payment_type:  'renewal',
-            paid_at:       new Date(lastWeek.getTime() + i * 3600000),
-            notes:         'scenario_c_lastweek',
-          });
-        }
-
-        // Today: 1 payment ≤ ₹4,000
-        scenCRows.push({
-          id:            randomUUID(),
-          member_id:     saltMs[saltMs.length - 1].mid,
-          membership_id: saltMs[saltMs.length - 1].msid,
-          location_id:   saltId,
-          amount:        499,
-          payment_type:  'new',
-          paid_at:       new Date(now.getTime() - ri(60, 300) * 60000),
-          notes:         'scenario_c_today',
-        });
-
-        await batchInsert(pool, 'payments',
-          ['id', 'member_id', 'membership_id', 'location_id', 'amount', 'payment_type', 'paid_at', 'notes'],
-          scenCRows
-        );
-      }
-    }
-
-    console.log('[seed] Anomaly scenarios C and D... done');
-
-    // ── 9. BOOKINGS ───────────────────────────────────────────────────────────
-    console.log('[seed] Seeding bookings (60-day history)...');
-
-    // Build location → meeting-room IDs from resRows already in memory
-    const roomsByLoc = {};
-    for (const r of resRows) {
-      if (r.type !== 'meeting_room') continue;
-      if (!roomsByLoc[r.location_id]) roomsByLoc[r.location_id] = [];
-      roomsByLoc[r.location_id].push(r.id);
-    }
-
-    // Build location → active-member IDs from memberRows already in memory
-    const activeMsByLoc = {};
+    const activeMemsByLoc = {};
     for (const m of memberRows) {
       if (m.status !== 'active') continue;
-      if (!activeMsByLoc[m.location_id]) activeMsByLoc[m.location_id] = [];
-      activeMsByLoc[m.location_id].push(m.id);
+      (activeMemsByLoc[m.location_id] = activeMemsByLoc[m.location_id] || []).push(m.id);
     }
 
     const bookingRows = [];
-
     for (const def of LOCS) {
       const locId = locMap[def.key].id;
-      const rooms = roomsByLoc[locId]    || [];
-      const mems  = activeMsByLoc[locId] || [];
+      const rooms = roomsByLoc[locId] || [];
+      const mems  = activeMemsByLoc[locId] || [];
       if (!rooms.length || !mems.length) continue;
 
       for (let d = 60; d >= 1; d--) {
@@ -577,71 +512,145 @@ async function seed() {
         for (let s = 0; s < nSlots; s++) {
           const startH = 9 + s;
           if (startH >= 21) break;
-
-          const starts    = new Date(dayBase.getTime() + startH * 3600000 + ri(0, 30) * 60000);
-          const ends      = new Date(starts.getTime() + ri(1, 3) * 3600000);
-          const rnd       = Math.random();
-          const status    = rnd < 0.70 ? 'confirmed' : rnd < 0.85 ? 'cancelled' : 'no_show';
-          const createdAt = new Date(starts.getTime() - ri(24, 72) * 3600000);
+          const starts = new Date(dayBase.getTime() + startH * 3600000 + ri(0,30) * 60000);
+          const ends   = new Date(starts.getTime() + ri(1, 3) * 3600000);
+          const rnd    = Math.random();
+          const bkStat = rnd < 0.70 ? 'confirmed' : rnd < 0.85 ? 'cancelled' : 'no_show';
 
           bookingRows.push({
-            id:          randomUUID(),
-            member_id:   mems[ri(0, mems.length - 1)],
-            location_id: locId,
-            resource_id: rooms[ri(0, rooms.length - 1)],
-            starts_at:   starts,
-            ends_at:     ends,
-            status,
-            amount:      ri(500, 2000),
-            created_at:  createdAt,
-          });
-        }
-      }
-    }
-
-    // Scenario D - high_no_show (91Springboard Sector 18 Noida)
-    // 15 bookings today: 10 no_show + 5 confirmed = 66.7% no_show rate > 30% threshold
-    {
-      const noidaId = locMap['spring_noida'].id;
-      const rooms   = roomsByLoc[noidaId]    || [];
-      const mems    = activeMsByLoc[noidaId] || [];
-
-      if (rooms.length && mems.length) {
-        const todayBase = new Date(now);
-        todayBase.setHours(0, 0, 0, 0);
-
-        for (let i = 0; i < 15; i++) {
-          // Stagger 30 min apart from 09:00 → last slot at 16:00
-          const starts    = new Date(todayBase.getTime() + (9 * 60 + i * 30) * 60000);
-          const ends      = new Date(starts.getTime() + ri(1, 3) * 3600000);
-          const createdAt = new Date(starts.getTime() - ri(24, 72) * 3600000);
-
-          bookingRows.push({
-            id:          randomUUID(),
-            member_id:   mems[ri(0, mems.length - 1)],
-            location_id: noidaId,
-            resource_id: rooms[ri(0, rooms.length - 1)],
-            starts_at:   starts,
-            ends_at:     ends,
-            status:      i < 10 ? 'no_show' : 'confirmed',
-            amount:      ri(500, 2000),
-            created_at:  createdAt,
+            id: randomUUID(), member_id: mems[ri(0, mems.length-1)],
+            location_id: locId, resource_id: rooms[ri(0, rooms.length-1)],
+            starts_at: starts, ends_at: ends, status: bkStat,
+            amount: ri(500, 2000),
+            created_at: new Date(starts.getTime() - ri(24,72) * 3600000),
           });
         }
       }
     }
 
     await batchInsert(pool, 'bookings',
-      ['id', 'member_id', 'location_id', 'resource_id', 'starts_at', 'ends_at', 'status', 'amount', 'created_at'],
+      ['id','member_id','location_id','resource_id','starts_at','ends_at','status','amount','created_at'],
       bookingRows
     );
-    console.log(`[seed] Seeding bookings... done (${bookingRows.length})`);
+    console.log(`[seed] Seeding historical bookings... done (${bookingRows.length})`);
 
-    // ── 10. USERS ─────────────────────────────────────────────────────────────
-    const { seedUsers } = require('./seedUsers');
-    await seedUsers(pool);
+    // ── SECTION 10: ANOMALY SCENARIOS ────────────────────────────────────────
+    console.log('[seed] Seeding anomaly scenarios...');
 
-    console.log('[seed] ✔ All done — 10 locations, 1500 members, ~80k check-ins, bookings, anomaly scenarios, and users seeded.');
+    // ── Scenario A — no_activity: BHIVE Velachery ────────────────────────────
+    // Insert 1 closed check-in 3 hours ago. Generate_series ends at NOW()-3h so
+    // no check-in is within 2h window → no_activity fires within 30s.
+    {
+      const velId = locMap['bhive_vel'].id;
+      const { rows: velMs } = await pool.query(
+        `SELECT id FROM members WHERE location_id = $1 AND status = 'active' ORDER BY random() LIMIT 1`,
+        [velId]
+      );
+      if (velMs.length > 0) {
+        const ciTime = new Date(now.getTime() - 3 * 3600000);        // 3h ago
+        const coTime = new Date(now.getTime() - 1.5 * 3600000);      // 1.5h ago (closed)
+        await pool.query(
+          `INSERT INTO checkins (member_id, location_id, checked_in, checked_out)
+           VALUES ($1, $2, $3, $4)`,
+          [velMs[0].id, velId, ciTime, coTime]
+        );
+      }
+    }
+
+    // ── Scenario B — overbooking: CoWrks Bandra West ─────────────────────────
+    // 125 open check-ins. Capacity = 80+40+12 = 132. 125/132 = 94.7% > 90% → fires.
+    {
+      const bandraId = locMap['cowrks_bandra'].id;
+      const { rows: bandraMs } = await pool.query(
+        `SELECT id FROM members
+         WHERE location_id = $1 AND status = 'active'
+         ORDER BY random() LIMIT 125`,
+        [bandraId]
+      );
+      if (bandraMs.length > 0) {
+        const openRows = bandraMs.map(m => ({
+          member_id:   m.id,
+          location_id: bandraId,
+          checked_in:  new Date(now.getTime() - ri(10, 89) * 60000),
+          checked_out: null,
+        }));
+        await batchInsert(pool, 'checkins',
+          ['member_id','location_id','checked_in','checked_out'],
+          openRows
+        );
+      }
+    }
+
+    // ── Scenario C — revenue_drop: BHive Salt Lake ────────────────────────────
+    // 8 payments on same weekday 7 days ago totalling ≥ ₹15,000.
+    // 0 payments today for Salt Lake → ratio = 0 < 0.70 → fires.
+    {
+      const saltId = locMap['bhive_salt'].id;
+      const { rows: saltMs } = await pool.query(
+        `SELECT m.id AS mid, ms.id AS msid
+         FROM members m
+         JOIN memberships ms ON ms.member_id = m.id AND ms.status IN ('active','expired')
+         WHERE m.location_id = $1 AND m.status = 'active'
+         ORDER BY random() LIMIT 8`,
+        [saltId]
+      );
+      if (saltMs.length >= 1) {
+        const lastWeekBase = subDays(now, 7);
+        lastWeekBase.setHours(10, 0, 0, 0);
+
+        const scenCRows = saltMs.map((row, i) => ({
+          id:            randomUUID(),
+          member_id:     row.mid,
+          membership_id: row.msid,
+          location_id:   saltId,
+          amount:        3999,         // 8 × ₹3,999 = ₹31,992 ≥ ₹15,000 ✓
+          payment_type:  'renewal',
+          paid_at:       new Date(lastWeekBase.getTime() + i * 3600000),
+          notes:         'scenario_c_lastweek',
+        }));
+        await batchInsert(pool, 'payments',
+          ['id','member_id','membership_id','location_id','amount','payment_type','paid_at','notes'],
+          scenCRows
+        );
+      }
+      // No today payments for Salt Lake — nothing added here intentionally.
+    }
+
+    // ── Scenario D — high_no_show: Awfis Koramangala ─────────────────────────
+    // 12 bookings today: 5 no_show + 7 confirmed = 41.7% no_show > 30% → fires.
+    {
+      const koraId = locMap['awfis_kora'].id;
+      const rooms  = roomsByLoc[koraId] || [];
+      const mems   = activeMemsByLoc[koraId] || [];
+
+      if (rooms.length && mems.length) {
+        const todayBookings = [];
+        for (let i = 0; i < 12; i++) {
+          const startH = 9 + i;           // 09:00 → 20:00
+          if (startH >= 22) break;
+          const starts = new Date(today.getTime() + startH * 3600000);
+          const ends   = new Date(starts.getTime() + ri(1, 2) * 3600000);
+          todayBookings.push({
+            id:          randomUUID(),
+            member_id:   mems[ri(0, mems.length-1)],
+            location_id: koraId,
+            resource_id: rooms[ri(0, rooms.length-1)],
+            starts_at:   starts,
+            ends_at:     ends,
+            status:      i < 5 ? 'no_show' : 'confirmed',
+            amount:      ri(500, 2000),
+            created_at:  new Date(starts.getTime() - ri(24,72) * 3600000),
+          });
+        }
+        await batchInsert(pool, 'bookings',
+          ['id','member_id','location_id','resource_id','starts_at','ends_at','status','amount','created_at'],
+          todayBookings
+        );
+      }
+    }
+
+    console.log('[seed] Anomaly scenarios seeded — detector will fire within 30 seconds');
+    console.log('[seed] Seed complete. Simulator will generate today onwards data.');
 
   } finally {
     await pool.end();

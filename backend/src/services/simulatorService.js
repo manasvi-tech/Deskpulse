@@ -237,28 +237,26 @@ async function simulatePayment() {
 // ── Tick ──────────────────────────────────────────────────────────────────────
 /**
  * One simulation tick.
- * Decision weights based on current time of day and day of week.
- * A minimum floor of 0.35 ensures events always fire when the simulator
- * is explicitly running, regardless of the container's UTC hour.
+ * Probability = hourly_weight × dow_weight × speed_factor.
+ * No MIN_FLOOR — ticks silently skip during closed hours so the dashboard
+ * shows realistic occupancy decay overnight rather than artificial activity.
  */
 async function tick() {
   try {
     const hw = getHourWeight();
     const dw = getDowWeight();
 
-    // Floor ensures the simulator always generates events when running.
-    // Without this, UTC 00–08 and UTC 22–23 would silently produce nothing.
-    const MIN_FLOOR = 0.35;
-    const activity  = Math.max(hw * dw, MIN_FLOOR);
-    const rand      = Math.random();
+    // Speed factor: 10x = full probability, 5x = 70%, 1x = 30%
+    const sf          = _state.speed === 10 ? 1.0 : _state.speed === 5 ? 0.7 : 0.3;
+    const probability = hw * dw * sf;
 
-    if (rand < activity * 0.50) {
-      await simulateCheckin();
-    } else if (rand < activity * 0.70) {
-      await simulateCheckout();
-    } else if (rand < activity * 0.75) {
-      await simulatePayment();
-    }
+    // Skip this tick — realistic dead-hour behaviour
+    if (Math.random() >= probability) return;
+
+    const r = Math.random();
+    if (r < 0.55)      await simulateCheckin();
+    else if (r < 0.85) await simulateCheckout();
+    else               await simulatePayment();
   } catch (err) {
     console.error('[simulator] Tick error:', err.message);
   }
@@ -287,6 +285,17 @@ function stop() {
   _state.running    = false;
 
   console.log('[simulator] Stopped');
+
+  // In demo deployments the simulator auto-resumes after a configurable delay
+  // so the dashboard never stays static for long.
+  if (process.env.AUTO_START_SIMULATOR === 'true') {
+    const delay = parseInt(process.env.SIMULATOR_AUTO_RESUME_DELAY, 10) || 30000;
+    setTimeout(() => {
+      console.log('[simulator] Auto-resuming after pause');
+      start(1);
+    }, delay);
+  }
+
   return { status: 'stopped' };
 }
 

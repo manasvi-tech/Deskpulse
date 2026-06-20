@@ -127,9 +127,16 @@ async function start() {
   startAnomalyDetector();
   scheduleMVRefresh();
 
+  // Auto-start simulator for demo deployments (keeps the dashboard live without manual intervention)
+  if (process.env.AUTO_START_SIMULATOR === 'true') {
+    const { start: startSim } = require('./services/simulatorService');
+    startSim(1);
+    console.log('[app] AUTO_START_SIMULATOR=true — simulator started at 1x');
+  }
+
   // Begin listening
   server.listen(PORT, () => {
-    console.log(`[app] WTF LivePulse backend running on port ${PORT}`);
+    console.log(`[app] DeskPulse backend running on port ${PORT}`);
   });
 }
 

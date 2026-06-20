@@ -3,12 +3,13 @@
 ## What This Project Is
 DeskPulse — a real-time operations intelligence dashboard for co-working space chains. Operations managers get live visibility across all locations: who is present right now, revenue today, anomalies, and analytics. Built as a production-grade SaaS product targeting small co-working chains (3–15 locations).
 
-## Absolute Hard Requirements
-- `docker compose up` must start the ENTIRE stack with zero manual steps
-- No npm install on host, no manual migrations, no external dependencies
-- All critical PostgreSQL queries must return under 1ms on a seeded 90-day dataset
-- A sequential scan on `checkins` or `payments` is an automatic failure
-- WebSocket only — no polling anywhere
+## Core Requirements
+- docker compose up starts the stack. On first launch, database seeds automatically.
+- After first launch, the database volume persists across restarts — data is never lost unless docker compose down -v is run deliberately.
+- No npm install on host machine — everything runs inside Docker containers.
+- All critical PostgreSQL queries must return under 1ms on a seeded dataset.
+- A sequential scan on checkins or payments is never acceptable.
+- WebSocket only — no polling anywhere in the codebase.
 
 ---
 
@@ -30,7 +31,7 @@ DeskPulse — a real-time operations intelligence dashboard for co-working space
 ## Required Folder Structure (follow exactly)
 
 ```
-wtf-livepulse/
+deskpulse/
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md
@@ -52,8 +53,8 @@ wtf-livepulse/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   ├── pages/              # Dashboard, Analytics, Anomalies
-│   │   ├── hooks/              # useWebSocket, useLocationData, useAnomalies
+│   │   ├── pages/              # Dashboard, Analytics, Anomalies, Members, Simulator, Users, Login
+│   │   ├── hooks/              # useWebSocket, useLocationData, useAnomalies, useAuth
 │   │   ├── store/
 │   │   └── main.jsx
 │   ├── tests/                  # Playwright E2E
@@ -86,7 +87,7 @@ wtf-livepulse/
 
 **anomalies** — id (UUID PK), location_id (FK → locations), type (TEXT CHECK IN ('no_activity','overbooking','revenue_drop','high_no_show')), severity (TEXT CHECK IN ('warning','critical')), message (TEXT), resolved (BOOLEAN DEFAULT FALSE), dismissed (BOOLEAN DEFAULT FALSE), detected_at (TIMESTAMPTZ DEFAULT NOW()), resolved_at (TIMESTAMPTZ)
 
-### Required Indexes (never skip, reviewers run EXPLAIN ANALYZE)
+### Required Indexes (never skip, run EXPLAIN ANALYZE to verify)
 
 ```sql
 -- Checkins (BRIN for time-series, composite for live occupancy — most frequent query)
@@ -146,6 +147,14 @@ CREATE UNIQUE INDEX ON location_hourly_stats (location_id, day_of_week, hour_of_
 | POST | /api/simulator/start | Body: { speed: 1 \| 5 \| 10 } |
 | POST | /api/simulator/stop | Pauses simulation |
 | POST | /api/simulator/reset | Clears open check-ins, returns to seeded baseline |
+| GET | /api/members | List members with pagination + search. Query params: location_id, search, page, limit. Frontdesk scoped to their location automatically. |
+| POST | /api/members | Register new member + create membership + payment in one transaction |
+| PATCH | /api/members/:id | Update member status (active/inactive/frozen) |
+| DELETE | /api/members/:id | Soft delete: sets status=inactive, cancels active memberships |
+| POST | /api/members/:id/renew | Renew or change plan. Body: { plan_type }. Cancels current membership, creates new one from current end_date. Broadcasts PAYMENT_EVENT. Allowed in demo mode. |
+| POST | /api/checkins | Manual check-in by frontdesk. Body: { member_id }. Broadcasts CHECKIN_EVENT. |
+| PATCH | /api/checkins/checkout/:memberId | Manual check-out. Finds open check-in, closes it. Broadcasts CHECKOUT_EVENT. |
+| GET | /api/checkins/status/:memberId | Check if member is currently checked in. |
 
 All endpoints must return proper HTTP status codes and validate query params.
 
@@ -210,6 +219,21 @@ Both tiers shown separately in the Analytics panel. Clicking a member shows thei
 - New events generated every 2 seconds when running
 - Writes directly to PostgreSQL (not mocked)
 - UI control panel: Start/Pause button, Speed multiplier (1x/5x/10x), Reset to baseline
+
+---
+
+## Simulator Auto-Start Behavior (Demo Deployments)
+
+When AUTO_START_SIMULATOR=true:
+- Simulator starts automatically at 1x speed when backend boots
+- Ensures dashboard always has live data when anyone opens the demo
+- Users can still control speed from the Simulator page (1x/5x/10x)
+- When user stops the simulator, it auto-resumes at 1x after SIMULATOR_AUTO_RESUME_DELAY ms
+- This ensures the next visitor also sees live data without manual intervention
+
+When AUTO_START_SIMULATOR=false (default for local dev):
+- Simulator must be started manually from the Simulator page
+- Stopping the simulator does not auto-resume
 
 ---
 
@@ -282,7 +306,7 @@ Both tiers shown separately in the Analytics panel. Clicking a member shows thei
 
 ---
 
-## Query Performance Targets (reviewers will verify with EXPLAIN ANALYZE)
+## Query Performance Targets (verify with EXPLAIN ANALYZE)
 
 | Query | Target |
 |---|---|
@@ -303,8 +327,8 @@ A sequential scan on checkins or payments = automatic failure regardless of quer
 - All backend logic in services/, route handlers only call services
 - Background jobs in jobs/ directory
 - Migration files numbered: 001_initial.sql, 002_indexes.sql, etc.
-- Database seeds auto-run on first Docker launch via /docker-entrypoint-initdb.d
-- Backend must run a seed check on startup
+- Database seeds run automatically on first Docker launch via /docker-entrypoint-initdb.d. On subsequent launches the existing volume is reused — seed does not run again. Never run docker compose down -v in production.
+- Backend checks on startup if database is already seeded (SELECT COUNT(*) FROM locations). If count > 0, seed is skipped entirely. Seed only runs on empty database.
 - All environment variables pre-configured in docker-compose.yml for local dev
 - .env.example must document every variable
 - Never hardcode secrets or connection strings outside environment variables
@@ -321,6 +345,30 @@ Three services only: db (postgres:15-alpine), backend (Node 20), frontend (React
 - Frontend served on port 3000
 - Backend depends on db with health check condition
 - Migrations auto-run via docker-entrypoint-initdb.d volume mount
+- Backend environment: AUTO_START_SIMULATOR: "false" — set to "true" in hosted demo deployments
+
+---
+
+## Development Workflow
+
+### Daily Development
+```
+docker compose up               — starts all services, reuses existing DB volume
+docker compose up --build       — rebuilds changed containers, reuses existing DB volume
+docker compose up --build backend — rebuilds backend only, fastest for backend changes
+docker compose restart backend  — restart backend without rebuild (config changes only)
+```
+
+### Nuclear Reset (dev only — wipes all data)
+```
+docker compose down -v && docker compose up --build
+```
+Use this only when: schema migrations change, seed data needs to be regenerated, or deliberately testing a clean first-launch experience. Never use -v in production.
+
+### Production Deployment
+- `docker compose down` (without -v) — stops containers, data volume survives
+- `docker compose up --build` — rebuilds and restarts with existing data intact
+- Seed script skips automatically because locations table already has rows
 
 ---
 
@@ -421,6 +469,8 @@ SESSION_SECRET=deskpulse_dev_secret_change_in_production
 JWT_SECRET=deskpulse_jwt_secret_change_in_production
 JWT_EXPIRY=3d
 VITE_DEMO_MODE=true
+AUTO_START_SIMULATOR=true   — auto-starts simulator at 1x speed on backend boot (set true in demo/hosted deployments, false in local dev)
+SIMULATOR_AUTO_RESUME_DELAY=30000   — milliseconds before simulator auto-resumes at 1x after user stops it (default 30 seconds)
 ```
 
 ### New Indexes
@@ -470,7 +520,7 @@ CREATE INDEX idx_users_role     ON users (role);
 
 ---
 
-## Seed Data Specification (reviewers verify these exact values)
+## Seed Data Specification
 
 ### 10 Locations — Exact Values (do not invent different locations)
 
@@ -582,7 +632,7 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 - No future-dated payments
 - payment_type matches member_type ('new' or 'renewal')
 
-### Anomaly Test Scenarios — Must be pre-built in seed (reviewers check within 60 seconds of docker compose up)
+### Anomaly Test Scenarios — Must be pre-built in seed (anomaly detector fires within 60 seconds of docker compose up)
 
 **Scenario A — No Activity (BHIVE — Velachery)**
 - 0 open check-ins for BHIVE — Velachery
@@ -613,8 +663,8 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 - **Auto-runs**: place SQL migration files in /docker-entrypoint-initdb.d/ — Postgres runs them on first init
 - **Must complete within 120 seconds** — backend starts after db healthcheck passes
 - **Insert order**: locations → resources → companies → members → memberships → checkins → payments → bookings (foreign key order)
-- **Batch inserts**: insert in batches of 500–1000 rows. Never insert 270,000 rows one-by-one — use INSERT INTO checkins SELECT ... FROM generate_series() for maximum speed
-- **Print progress to stdout**: 'Seeding locations... done', 'Seeding 5000 members... done', etc. Reviewers watch Docker logs
+- **Batch inserts**: insert in batches of 500–1000 rows. Never insert 90,000 rows one-by-one — use INSERT INTO checkins SELECT ... FROM generate_series() for maximum speed
+- **Print progress to stdout**: 'Seeding locations... done', 'Seeding 1500 members... done', etc. progress visible in Docker logs
 - **Preferred approach**: PostgreSQL generate_series() inside SQL for check-ins — fastest and stays inside DB
 - After bulk insert of checkins, there is no last_checkin_at column on members — the analytics query derives last check-in from the checkins table directly
 
@@ -624,7 +674,7 @@ All locations status = 'active'. Use gen_random_uuid() for IDs — never hardcod
 
 | Index | Type | Why |
 |---|---|---|
-| `idx_checkins_live_occupancy` | B-Tree partial (`WHERE checked_out IS NULL`) | Live occupancy is the most frequent query. Partial index keeps it tiny — only open check-ins are indexed, not 270k+ historical rows. Extremely fast COUNT(*). |
+| `idx_checkins_live_occupancy` | B-Tree partial (`WHERE checked_out IS NULL`) | Live occupancy is the most frequent query. Partial index keeps it tiny — only open check-ins are indexed, not 90k+ historical rows. Extremely fast COUNT(*). |
 | `idx_checkins_time_brin` | BRIN | checkins is an append-only time-series table. BRIN stores min/max per page block — tiny index size, perfect for range queries on `checked_in`. Never use B-Tree on a massive append-only time column. |
 | `idx_checkins_member` | B-Tree composite | Member-level history lookups. DESC order matches query pattern. |
 | `idx_payments_location_date` | B-Tree composite (location_id, paid_at DESC) | Today's revenue is the most frequent analytics query. Composite covers both the WHERE location_id = $1 and the paid_at >= CURRENT_DATE filter in one index scan. |
@@ -654,19 +704,6 @@ Always run as: `EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)` — execution time must
 
 ---
 
-
-
-## README Structure (all 5 sections mandatory)
-
-| Section | What to Write |
-|---|---|
-| 1. Quick Start | `docker compose up` — nothing else. List Docker Desktop as only prerequisite. |
-| 2. Architecture Decisions | Explain BRIN vs B-Tree vs partial index choices. Why materialized view for heatmap. Why memberships is a separate table from members. Any non-obvious decisions. |
-| 3. AI Tools Used | List every AI tool used and exactly what each was used for. Hiding this = disqualification. Being thorough here = advantage. |
-| 4. Query Benchmarks | Table of all 6 queries with measured execution time from EXPLAIN ANALYZE. Reference screenshots in /benchmarks. |
-| 5. Known Limitations | Honest list of anything incomplete or not working. Silence is penalised more than honesty. |
-
----
 
 
 ## Future Scope (Phase 2 — do not implement now, schema must not conflict)
