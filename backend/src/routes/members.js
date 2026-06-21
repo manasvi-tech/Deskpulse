@@ -5,6 +5,8 @@ const router         = express.Router();
 const { randomUUID } = require('crypto');
 const pool           = require('../db/pool');
 const logger         = require('../utils/logger');
+const { validate }   = require('../middleware/validate');
+const { memberSchema, renewSchema, paginationSchema } = require('../schemas');
 const { authMiddleware } = require('../middleware/auth');
 const statsService   = require('../services/statsService');
 const { broadcastPayment } = require('../websocket/broadcast');
@@ -15,7 +17,7 @@ const PLAN_AMOUNT   = { day_pass: 499, hot_desk: 3999, dedicated_desk: 7999, pri
 router.use(authMiddleware);
 
 // GET /api/members — list members with pagination and optional search
-router.get('/', async (req, res) => {
+router.get('/', validate(paginationSchema), async (req, res) => {
   try {
     let { location_id, search = '', page = 1, limit = 20 } = req.query;
     page  = Math.max(1, parseInt(page,  10) || 1);
@@ -44,7 +46,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/members — register a new member with membership + payment in one transaction
-router.post('/', async (req, res) => {
+router.post('/', validate(memberSchema), async (req, res) => {
   try {
     let { name, email, phone, plan_type, location_id, start_date } = req.body;
 
@@ -182,7 +184,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/members/:id/renew — renew or upgrade membership plan
-router.post('/:id/renew', async (req, res) => {
+router.post('/:id/renew', validate(renewSchema), async (req, res) => {
   try {
     const { plan_type, start_date } = req.body;
 

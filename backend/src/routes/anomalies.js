@@ -2,10 +2,12 @@
  * Routes: /api/anomalies
  */
 
-const express = require('express');
-const router  = express.Router();
-const stats   = require('../services/statsService');
-const logger  = require('../utils/logger');
+const express  = require('express');
+const router   = express.Router();
+const stats    = require('../services/statsService');
+const logger   = require('../utils/logger');
+const { validate }             = require('../middleware/validate');
+const { anomalyParamsSchema }  = require('../schemas');
 
 const VALID_SEVERITIES = ['warning', 'critical'];
 
@@ -29,7 +31,7 @@ router.get('/', async (req, res) => {
 });
 
 // PATCH /api/anomalies/:id/dismiss — WARNING only; returns 403 for CRITICAL
-router.patch('/:id/dismiss', async (req, res) => {
+router.patch('/:id/dismiss', validate(anomalyParamsSchema), async (req, res) => {
   try {
     const result = await stats.dismissAnomaly(req.params.id);
 

@@ -4,25 +4,26 @@
 
 const express   = require('express');
 const router    = express.Router();
+const logger    = require('../utils/logger');
+const { validate }        = require('../middleware/validate');
+const { simulatorSchema } = require('../schemas');
 const simulator = require('../services/simulatorService');
 
 const VALID_SPEEDS = [1, 5, 10];
 
 // POST /api/simulator/start  body: { speed: 1 | 5 | 10 }
-router.post('/start', async (req, res) => {
+router.post('/start', validate(simulatorSchema), async (req, res) => {
   try {
-    const speed = Number(req.body?.speed ?? 1);
-
+    const speed = Number(req.body.speed);
     if (!VALID_SPEEDS.includes(speed)) {
       return res.status(400).json({
         error: `Invalid speed — must be one of: ${VALID_SPEEDS.join(', ')}`,
       });
     }
-
     const result = simulator.start(speed);
     res.json(result);
   } catch (err) {
-    console.error('[simulator] POST /start error:', err.message);
+    logger.error({ err: err.message }, '[simulator] POST /start error');
     res.status(500).json({ error: 'Failed to start simulator' });
   }
 });
@@ -33,7 +34,7 @@ router.post('/stop', async (req, res) => {
     const result = simulator.stop();
     res.json(result);
   } catch (err) {
-    console.error('[simulator] POST /stop error:', err.message);
+    logger.error({ err: err.message }, '[simulator] POST /stop error');
     res.status(500).json({ error: 'Failed to stop simulator' });
   }
 });
@@ -44,7 +45,7 @@ router.post('/reset', async (req, res) => {
     const result = await simulator.reset();
     res.json(result);
   } catch (err) {
-    console.error('[simulator] POST /reset error:', err.message);
+    logger.error({ err: err.message }, '[simulator] POST /reset error');
     res.status(500).json({ error: 'Failed to reset simulator' });
   }
 });

@@ -1,9 +1,11 @@
 require('dotenv').config();
-const express      = require('express');
-const cors         = require('cors');
-const http         = require('http');
+const express    = require('express');
+const cors       = require('cors');
+const http       = require('http');
 const cookieParser = require('cookie-parser');
-const morgan       = require('morgan');
+const morgan     = require('morgan');
+const helmet     = require('helmet');
+const rateLimit  = require('express-rate-limit');
 
 const logger = require('./utils/logger');
 const pool   = require('./db/pool');
@@ -24,11 +26,28 @@ const app    = express();
 const server = http.createServer(app);
 const PORT   = process.env.PORT || 3001;
 
+// ── Helmet — security headers, FIRST middleware ───────────────────────────────
+app.use(helmet({
+  crossOriginEmbedderPolicy: false, // React assets cross-origin
+  contentSecurityPolicy:     false, // React SPA handles its own CSP
+}));
+
 // ── CORS — credentials required for httpOnly cookie auth ──────────────────────
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',')
+  : ['http://localhost:3000', 'http://localhost:3001'];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      logger.warn({ origin }, '[cors] Blocked request from unauthorized origin');
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials:    true,
+  methods:        ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
@@ -70,6 +89,30 @@ const morganMiddleware = morgan(
   }
 );
 app.use(morganMiddleware);
+
+// ── Rate limiting — health is mounted above so it's exempt ───────────────────
+const apiLimiter = rateLimit({
+  windowMs:       60 * 1000,
+  max:            200,
+  message:        { error: 'Too many requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders:  false,
+});
+
+const authLimiter = rateLimit({
+  windowMs:       60 * 1000,
+  max:            10,
+  message:        { error: 'Too many login attempts. Please wait 1 minute.' },
+  standardHeaders: true,
+  legacyHeaders:  false,
+  handler: (req, res, _next, options) => {
+    logger.warn({ ip: req.ip }, '[auth] Rate limit exceeded on login');
+    res.status(429).json(options.message);
+  },
+});
+
+app.use('/api', apiLimiter);
+app.use('/api/auth/login', authLimiter);
 
 // ── Auth routes (no auth middleware — login/logout/me are public or self-auth) ─
 app.use('/api/auth', authRouter);

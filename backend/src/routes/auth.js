@@ -1,16 +1,18 @@
 'use strict';
 
-const express = require('express');
-const bcrypt  = require('bcryptjs');
-const jwt     = require('jsonwebtoken');
-const pool    = require('../db/pool');
-const logger  = require('../utils/logger');
+const express  = require('express');
+const bcrypt   = require('bcryptjs');
+const jwt      = require('jsonwebtoken');
+const pool     = require('../db/pool');
+const logger   = require('../utils/logger');
+const { validate }     = require('../middleware/validate');
+const { loginSchema }  = require('../schemas');
 const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', validate(loginSchema), async (req, res) => {
   try {
     const { email, password } = req.body;
 

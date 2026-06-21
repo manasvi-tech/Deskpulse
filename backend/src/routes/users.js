@@ -2,6 +2,9 @@
 
 const express      = require('express');
 const router       = express.Router();
+const logger       = require('../utils/logger');
+const { validate } = require('../middleware/validate');
+const { userSchema } = require('../schemas');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const usersService = require('../services/usersService');
 
@@ -14,19 +17,16 @@ router.get('/', async (req, res) => {
     const users = await usersService.getAllUsers();
     return res.json({ users });
   } catch (err) {
-    console.error('[users] GET / error:', err.message);
+    logger.error({ err: err.message }, '[users] GET / error');
     return res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
 // POST /api/users
-router.post('/', async (req, res) => {
+router.post('/', validate(userSchema), async (req, res) => {
   try {
     const { name, email, password, role, location_id } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'name, email, and password are required' });
-    }
     if (!['super_admin', 'frontdesk'].includes(role)) {
       return res.status(400).json({ error: 'role must be super_admin or frontdesk' });
     }
@@ -40,7 +40,7 @@ router.post('/', async (req, res) => {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Email already in use' });
     }
-    console.error('[users] POST / error:', err.message);
+    logger.error({ err: err.message }, '[users] POST / error');
     return res.status(500).json({ error: 'Failed to create user' });
   }
 });
@@ -58,7 +58,7 @@ router.patch('/:id', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     return res.json({ user });
   } catch (err) {
-    console.error('[users] PATCH /:id error:', err.message);
+    logger.error({ err: err.message }, '[users] PATCH /:id error');
     return res.status(500).json({ error: 'Failed to update user' });
   }
 });
@@ -74,7 +74,7 @@ router.delete('/:id', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     return res.json({ success: true });
   } catch (err) {
-    console.error('[users] DELETE /:id error:', err.message);
+    logger.error({ err: err.message }, '[users] DELETE /:id error');
     return res.status(500).json({ error: 'Failed to deactivate user' });
   }
 });

@@ -4,12 +4,14 @@ const express      = require('express');
 const router       = express.Router();
 const pool         = require('../db/pool');
 const logger       = require('../utils/logger');
+const { validate }       = require('../middleware/validate');
+const { checkinSchema }  = require('../schemas');
 const { authMiddleware, requireLocation } = require('../middleware/auth');
 const { broadcastCheckin, broadcastCheckout } = require('../websocket/broadcast');
 const statsService = require('../services/statsService');
 
 // POST /api/checkins — Manual check-in by frontdesk or admin
-router.post('/', authMiddleware, requireLocation, async (req, res) => {
+router.post('/', authMiddleware, requireLocation, validate(checkinSchema), async (req, res) => {
   try {
     const { member_id } = req.body;
     if (!member_id) return res.status(400).json({ error: 'member_id is required' });
