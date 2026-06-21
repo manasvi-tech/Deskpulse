@@ -6,6 +6,7 @@
 const express = require('express');
 const router  = express.Router();
 const stats   = require('../services/statsService');
+const logger  = require('../utils/logger');
 
 // GET /api/locations — all locations with live occupancy + today's revenue
 router.get('/', async (req, res) => {
@@ -13,7 +14,7 @@ router.get('/', async (req, res) => {
     const locations = await stats.getAllLocationsWithStats();
     res.json({ locations });
   } catch (err) {
-    console.error('[locations] GET / error:', err.message);
+    logger.error({ err: err.message }, '[locations] GET / error');
     res.status(500).json({ error: 'Failed to fetch locations' });
   }
 });
@@ -25,7 +26,7 @@ router.get('/:id/live', async (req, res) => {
     if (!location) return res.status(404).json({ error: 'Location not found' });
     res.json({ location });
   } catch (err) {
-    console.error('[locations] GET /:id/live error:', err.message);
+    logger.error({ err: err.message }, '[locations] GET /:id/live error');
     res.status(500).json({ error: 'Failed to fetch location live data' });
   }
 });
@@ -46,7 +47,7 @@ router.get('/:id/analytics', async (req, res) => {
 
     res.json({ analytics });
   } catch (err) {
-    console.error('[locations] GET /:id/analytics error:', err.message);
+    logger.error({ err: err.message }, '[locations] GET /:id/analytics error');
     res.status(500).json({ error: 'Failed to fetch location analytics' });
   }
 });

@@ -4,6 +4,7 @@ const express = require('express');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const pool    = require('../db/pool');
+const logger  = require('../utils/logger');
 const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
@@ -59,7 +60,7 @@ router.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[auth] POST /login error:', err.message);
+    logger.error({ err: err.message }, '[auth] POST /login error');
     return res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -93,7 +94,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[auth] GET /me error:', err.message);
+    logger.error({ err: err.message }, '[auth] GET /me error');
     return res.status(500).json({ error: 'Failed to fetch user' });
   }
 });

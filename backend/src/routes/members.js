@@ -4,6 +4,7 @@ const express        = require('express');
 const router         = express.Router();
 const { randomUUID } = require('crypto');
 const pool           = require('../db/pool');
+const logger         = require('../utils/logger');
 const { authMiddleware } = require('../middleware/auth');
 const statsService   = require('../services/statsService');
 const { broadcastPayment } = require('../websocket/broadcast');
@@ -37,7 +38,7 @@ router.get('/', async (req, res) => {
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
-    console.error('[members] GET / error:', err.message);
+    logger.error({ err: err.message }, '[members] GET / error');
     return res.status(500).json({ error: 'Failed to fetch members' });
   }
 });
@@ -105,7 +106,7 @@ router.post('/', async (req, res) => {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Email already in use' });
     }
-    console.error('[members] POST / error:', err.message);
+    logger.error({ err: err.message }, '[members] POST / error');
     return res.status(500).json({ error: 'Failed to register member' });
   }
 });
@@ -135,7 +136,7 @@ router.patch('/:id', async (req, res) => {
     );
     return res.json({ member });
   } catch (err) {
-    console.error('[members] PATCH /:id error:', err.message);
+    logger.error({ err: err.message }, '[members] PATCH /:id error');
     return res.status(500).json({ error: 'Failed to update member' });
   }
 });
@@ -175,7 +176,7 @@ router.delete('/:id', async (req, res) => {
       client.release();
     }
   } catch (err) {
-    console.error('[members] DELETE /:id error:', err.message);
+    logger.error({ err: err.message }, '[members] DELETE /:id error');
     return res.status(500).json({ error: 'Failed to delete member' });
   }
 });
@@ -253,7 +254,7 @@ router.post('/:id/renew', async (req, res) => {
       client.release();
     }
   } catch (err) {
-    console.error('[members] POST /:id/renew error:', err.message);
+    logger.error({ err: err.message }, '[members] POST /:id/renew error');
     return res.status(500).json({ error: 'Failed to renew membership' });
   }
 });

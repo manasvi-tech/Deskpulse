@@ -12,7 +12,8 @@
  * Speed multiplier: 1x / 5x / 10x (reduces the tick interval).
  */
 
-const pool = require('../db/pool');
+const pool   = require('../db/pool');
+const logger = require('../utils/logger');
 const {
   broadcastCheckin,
   broadcastCheckout,
@@ -258,7 +259,7 @@ async function tick() {
     else if (r < 0.85) await simulateCheckout();
     else               await simulatePayment();
   } catch (err) {
-    console.error('[simulator] Tick error:', err.message);
+    logger.error({ err: err.message }, '[simulator] Tick error');
   }
 }
 
@@ -273,7 +274,7 @@ function start(speed = 1) {
   const interval = Math.max(200, Math.round(BASE_INTERVAL_MS / speed));
   _state.intervalId = setInterval(tick, interval);
 
-  console.log(`[simulator] Started at ${speed}x speed (interval: ${interval}ms)`);
+  logger.info({ speed, interval_ms: interval }, '[simulator] Started');
   return { status: 'running', speed };
 }
 
@@ -284,14 +285,14 @@ function stop() {
   _state.intervalId = null;
   _state.running    = false;
 
-  console.log('[simulator] Stopped');
+  logger.info('[simulator] Stopped');
 
   // In demo deployments the simulator auto-resumes after a configurable delay
   // so the dashboard never stays static for long.
   if (process.env.AUTO_START_SIMULATOR === 'true') {
     const delay = parseInt(process.env.SIMULATOR_AUTO_RESUME_DELAY, 10) || 30000;
     setTimeout(() => {
-      console.log('[simulator] Auto-resuming after pause');
+      logger.info('[simulator] Auto-resuming after pause');
       start(1);
     }, delay);
   }
@@ -304,7 +305,7 @@ async function reset() {
   await pool.query(
     `UPDATE checkins SET checked_out = NOW() WHERE checked_out IS NULL`
   );
-  console.log('[simulator] Reset: all open check-ins closed');
+  logger.info('[simulator] Reset: all open check-ins closed');
   return { status: 'reset' };
 }
 
@@ -312,11 +313,14 @@ function getState() {
   return { running: _state.running, speed: _state.speed };
 }
 
+const isRunning = () => _state.running;
+
 module.exports = {
   start,
   stop,
   reset,
   getState,
+  isRunning,
   tick,
   simulateCheckin,
   simulateCheckout,

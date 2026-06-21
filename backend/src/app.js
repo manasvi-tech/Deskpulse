@@ -3,9 +3,12 @@ const express      = require('express');
 const cors         = require('cors');
 const http         = require('http');
 const cookieParser = require('cookie-parser');
+const morgan       = require('morgan');
 
-const pool = require('./db/pool');
+const logger = require('./utils/logger');
+const pool   = require('./db/pool');
 
+const healthRouter    = require('./routes/health');
 const locationsRouter = require('./routes/locations');
 const anomaliesRouter = require('./routes/anomalies');
 const analyticsRouter = require('./routes/analytics');
@@ -55,15 +58,18 @@ const demoGuard = (req, res, next) => {
 };
 app.use(demoGuard);
 
-// ── Health check (used by Docker healthcheck + frontend depends_on) ──────────
-app.get('/api/health', async (req, res) => {
-  try {
-    await pool.query('SELECT 1');
-    res.json({ status: 'ok', db: 'connected', ts: new Date().toISOString() });
-  } catch (err) {
-    res.status(503).json({ status: 'error', db: 'disconnected', error: err.message });
+// ── Health check — public, no auth required ───────────────────────────────────
+app.use('/api/health', healthRouter);
+
+// ── HTTP request logging (skips /api/health — fires every 30s) ───────────────
+const morganMiddleware = morgan(
+  ':method :url :status :res[content-length] - :response-time ms',
+  {
+    stream: { write: (message) => logger.info({ type: 'http' }, message.trim()) },
+    skip:   (req) => req.url === '/api/health',
   }
-});
+);
+app.use(morganMiddleware);
 
 // ── Auth routes (no auth middleware — login/logout/me are public or self-auth) ─
 app.use('/api/auth', authRouter);
@@ -98,7 +104,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, _next) => {
-  console.error('[error]', err.message);
+  logger.error({ err: err.message }, '[app] Unhandled request error');
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -107,21 +113,21 @@ async function start() {
   try {
     const { rows } = await pool.query('SELECT COUNT(*)::int AS cnt FROM locations');
     if (rows[0].cnt === 0) {
-      console.log('[app] No locations found — running seed...');
+      logger.info('[app] No locations found — running seed...');
       const { seed } = require('./db/seeds/seed');
       await seed();
     } else {
-      console.log(`[app] Database ready: ${rows[0].cnt} locations loaded`);
+      logger.info({ count: rows[0].cnt }, '[app] Database ready');
     }
   } catch (err) {
-    console.error('[app] DB check / seed failed:', err.message);
+    logger.error({ err: err.message }, '[app] DB check / seed failed');
   }
 
   try {
     await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY location_hourly_stats');
-    console.log('[mv] location_hourly_stats refreshed on startup');
+    logger.info('[mv] location_hourly_stats refreshed on startup');
   } catch (err) {
-    console.error('[mv] Failed to refresh location_hourly_stats:', err.message);
+    logger.error({ err: err.message }, '[mv] Failed to refresh location_hourly_stats');
   }
 
   // Attach WebSocket server to the HTTP server
@@ -138,14 +144,36 @@ async function start() {
   if (process.env.AUTO_START_SIMULATOR === 'true') {
     const { start: startSim } = require('./services/simulatorService');
     startSim(1);
-    console.log('[app] AUTO_START_SIMULATOR=true — simulator started at 1x');
+    logger.info('[app] AUTO_START_SIMULATOR=true — simulator started at 1x');
   }
 
   // Begin listening
   server.listen(PORT, () => {
-    console.log(`[app] DeskPulse backend running on port ${PORT}`);
+    logger.info({ port: PORT }, '[app] DeskPulse backend running');
   });
 }
+
+// ── Unhandled exception / rejection guards ────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err: err.message, stack: err.stack }, '[app] Uncaught exception — shutting down');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason: String(reason) }, '[app] Unhandled promise rejection');
+});
+
+// ── Graceful shutdown on SIGTERM ──────────────────────────────────────────────
+process.on('SIGTERM', () => {
+  logger.info('[app] SIGTERM received — starting graceful shutdown');
+  server.close(() => {
+    logger.info('[app] HTTP server closed');
+    pool.end(() => {
+      logger.info('[app] Database pool closed');
+      process.exit(0);
+    });
+  });
+});
 
 // Only start server when invoked directly (not when imported by tests)
 if (require.main === module) {

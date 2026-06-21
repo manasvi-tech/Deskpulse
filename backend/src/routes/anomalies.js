@@ -5,6 +5,7 @@
 const express = require('express');
 const router  = express.Router();
 const stats   = require('../services/statsService');
+const logger  = require('../utils/logger');
 
 const VALID_SEVERITIES = ['warning', 'critical'];
 
@@ -22,7 +23,7 @@ router.get('/', async (req, res) => {
     const anomalies = await stats.getActiveAnomalies({ locationId: location_id, severity });
     res.json({ anomalies });
   } catch (err) {
-    console.error('[anomalies] GET / error:', err.message);
+    logger.error({ err: err.message }, '[anomalies] GET / error');
     res.status(500).json({ error: 'Failed to fetch anomalies' });
   }
 });
@@ -44,7 +45,7 @@ router.patch('/:id/dismiss', async (req, res) => {
 
     res.json({ anomaly: result.anomaly });
   } catch (err) {
-    console.error('[anomalies] PATCH /:id/dismiss error:', err.message);
+    logger.error({ err: err.message }, '[anomalies] PATCH /:id/dismiss error');
     res.status(500).json({ error: 'Failed to dismiss anomaly' });
   }
 });

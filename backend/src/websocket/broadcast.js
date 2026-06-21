@@ -5,6 +5,7 @@
  */
 
 const { getWSS } = require('./server');
+const logger     = require('../utils/logger');
 
 const WS_OPEN = 1;
 
@@ -27,7 +28,7 @@ function broadcast(payload) {
         client.send(msg);
         sent++;
       } catch (err) {
-        console.error('[ws:broadcast] Send error:', err.message);
+        logger.error({ err: err.message }, '[ws:broadcast] Send error');
       }
     }
   });

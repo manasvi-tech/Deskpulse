@@ -11,6 +11,7 @@
 const cron                   = require('node-cron');
 const { detectAllAnomalies } = require('../services/anomalyService');
 const pool                   = require('../db/pool');
+const logger                 = require('../utils/logger');
 
 let detectorTask = null;
 let mvTask       = null;
@@ -25,15 +26,15 @@ function startAnomalyDetector() {
     try {
       await detectAllAnomalies();
     } catch (err) {
-      console.error('[anomalyDetector] Cron error:', err.message);
+      logger.error({ err: err.message }, '[anomalyDetector] Cron error');
     }
   });
 
-  console.log('[anomalyDetector] Started — running every 30 seconds');
+  logger.info('[anomalyDetector] Started — running every 30 seconds');
 
   // Run once immediately so anomalies are populated before first client connects
   detectAllAnomalies().catch((err) => {
-    console.error('[anomalyDetector] Initial run error:', err.message);
+    logger.error({ err: err.message }, '[anomalyDetector] Initial run error');
   });
 }
 
@@ -54,13 +55,13 @@ function scheduleMVRefresh() {
       await pool.query(
         'REFRESH MATERIALIZED VIEW CONCURRENTLY location_hourly_stats'
       );
-      console.log('[mv] location_hourly_stats refreshed');
+      logger.info('[mv] location_hourly_stats refreshed');
     } catch (err) {
-      console.error('[mv] Refresh error:', err.message);
+      logger.error({ err: err.message }, '[mv] Refresh error');
     }
   });
 
-  console.log('[mv] location_hourly_stats refresh scheduled — every 15 minutes');
+  logger.info('[mv] location_hourly_stats refresh scheduled — every 15 minutes');
 }
 
 module.exports = { startAnomalyDetector, stopAnomalyDetector, scheduleMVRefresh };

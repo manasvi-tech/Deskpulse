@@ -14,7 +14,8 @@
  *   high_no_show: no_show rate drops below 20%
  */
 
-const pool = require('../db/pool');
+const pool   = require('../db/pool');
+const logger = require('../utils/logger');
 const {
   broadcastAnomalyDetected,
   broadcastAnomalyResolved,
@@ -340,7 +341,7 @@ async function detectAllAnomalies() {
       detectHighNoShow(),
     ]);
   } catch (err) {
-    console.error('[anomalyService] Detection cycle error:', err.message);
+    logger.error({ err: err.message }, '[anomalyService] Detection cycle error');
   }
 }
 

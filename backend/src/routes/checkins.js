@@ -3,6 +3,7 @@
 const express      = require('express');
 const router       = express.Router();
 const pool         = require('../db/pool');
+const logger       = require('../utils/logger');
 const { authMiddleware, requireLocation } = require('../middleware/auth');
 const { broadcastCheckin, broadcastCheckout } = require('../websocket/broadcast');
 const statsService = require('../services/statsService');
@@ -60,7 +61,7 @@ router.post('/', authMiddleware, requireLocation, async (req, res) => {
 
     return res.status(201).json({ checkin, current_occupancy: occupancy, capacity_pct });
   } catch (err) {
-    console.error('[checkins] POST / error:', err.message);
+    logger.error({ err: err.message }, '[checkins] POST / error');
     return res.status(500).json({ error: 'Failed to check in member' });
   }
 });
@@ -113,7 +114,7 @@ router.patch('/checkout/:memberId', authMiddleware, requireLocation, async (req,
 
     return res.json({ checkin, current_occupancy: occupancy, capacity_pct });
   } catch (err) {
-    console.error('[checkins] PATCH /checkout/:memberId error:', err.message);
+    logger.error({ err: err.message }, '[checkins] PATCH /checkout/:memberId error');
     return res.status(500).json({ error: 'Failed to check out member' });
   }
 });
@@ -128,7 +129,7 @@ router.get('/status/:memberId', authMiddleware, async (req, res) => {
       checked_in_at: openCheckin?.checked_in || null,
     });
   } catch (err) {
-    console.error('[checkins] GET /status/:memberId error:', err.message);
+    logger.error({ err: err.message }, '[checkins] GET /status/:memberId error');
     return res.status(500).json({ error: 'Failed to get check-in status' });
   }
 });

@@ -5,6 +5,7 @@
  */
 
 const { WebSocketServer } = require('ws');
+const logger              = require('../utils/logger');
 
 /** @type {WebSocketServer|null} */
 let wss = null;
@@ -18,14 +19,14 @@ function initWebSocket(httpServer) {
 
   wss.on('connection', (ws, req) => {
     const ip = req.socket.remoteAddress || 'unknown';
-    console.log(`[ws] Client connected from ${ip}  (total: ${wss.clients.size})`);
+    logger.info({ ip, total: wss.clients.size }, '[ws] Client connected');
 
     ws.on('error', (err) => {
-      console.error('[ws] Client error:', err.message);
+      logger.warn({ err: err.message }, '[ws] Client error');
     });
 
     ws.on('close', () => {
-      console.log(`[ws] Client disconnected (remaining: ${wss.clients.size})`);
+      logger.info({ remaining: wss.clients.size }, '[ws] Client disconnected');
     });
 
     // Immediately send a connected confirmation so the frontend can show the green dot
@@ -33,10 +34,10 @@ function initWebSocket(httpServer) {
   });
 
   wss.on('error', (err) => {
-    console.error('[ws] Server error:', err.message);
+    logger.error({ err: err.message }, '[ws] Server error');
   });
 
-  console.log('[ws] WebSocket server initialised on shared HTTP port');
+  logger.info('[ws] WebSocket server initialised on shared HTTP port');
 }
 
 /**
