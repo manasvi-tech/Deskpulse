@@ -5,8 +5,24 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/db/migrations/001_initial.sql:/docker-entrypoint-initdb.d/01_initial.sql
+      - ./backend/src/db/migrations/002_indexes.sql:/docker-entrypoint-initdb.d/02_indexes.sql
+      - ./backend/src/db/migrations/003_materialized_view.sql:/docker-entrypoint-initdb.d/03_materialized_view.sql
+      - ./backend/src/db/migrations/004_drop_gym_tables.sql:/docker-entrypoint-initdb.d/04_drop_gym_tables.sql
+      - ./backend/src/db/migrations/005_coworking_schema.sql:/docker-entrypoint-initdb.d/05_coworking_schema.sql
+      - ./backend/src/db/migrations/006_coworking_indexes.sql:/docker-entrypoint-initdb.d/06_coworking_indexes.sql
+      - ./backend/src/db/migrations/007_materialized_view.sql:/docker-entrypoint-initdb.d/07_materialized_view.sql
+      - ./backend/src/db/migrations/008_auth.sql:/docker-entrypoint-initdb.d/08_auth.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   backend:
     build:
@@ -22,6 +38,12 @@ services:
       JWT_EXPIRY: ${JWT_EXPIRY}
       AUTO_START_SIMULATOR: ${AUTO_START_SIMULATOR}
       SIMULATOR_AUTO_RESUME_DELAY: ${SIMULATOR_AUTO_RESUME_DELAY}
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:
@@ -29,3 +51,11 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_DEMO_MODE: ${VITE_DEMO_MODE}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
