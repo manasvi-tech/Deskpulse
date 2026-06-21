@@ -23,3 +23,53 @@
     transition: all 300ms ease-out;
   }
 }
+
+/* ── Driver.js tour overrides — match DeskPulse light theme ────────────── */
+.driver-popover {
+  background: #ffffff !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08) !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+.driver-popover-title {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #0F172A !important;
+  margin-bottom: 6px !important;
+}
+.driver-popover-description {
+  font-size: 13px !important;
+  color: #64748B !important;
+  line-height: 1.6 !important;
+}
+.driver-popover-footer button {
+  font-size: 13px !important;
+  border-radius: 8px !important;
+  padding: 6px 14px !important;
+}
+.driver-popover-next-btn {
+  background: #0EA5E9 !important;
+  color: white !important;
+  border: none !important;
+}
+.driver-popover-next-btn:hover {
+  background: #0284C7 !important;
+}
+.driver-popover-prev-btn {
+  background: white !important;
+  color: #64748B !important;
+  border: 1px solid #E2E8F0 !important;
+}
+.driver-popover-prev-btn:hover {
+  background: #F8FAFC !important;
+}
+.driver-popover-close-btn {
+  color: #94A3B8 !important;
+}
+.driver-popover-close-btn:hover {
+  color: #475569 !important;
+}
+.driver-overlay {
+  background: rgba(15, 23, 42, 0.6) !important;
+}

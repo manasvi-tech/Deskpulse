@@ -72,7 +72,7 @@ export default function Simulator() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6 max-w-2xl">
+      <div className="grid grid-cols-2 gap-6 max-w-2xl" data-tour="simulator-controls">
         {/* Status card */}
         <div className="bg-white rounded-xl p-6 border border-slate-200">
           <p className="text-slate-500 text-sm font-medium mb-3">Simulator Status</p>

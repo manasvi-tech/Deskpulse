@@ -35,7 +35,7 @@ export default function LocationSwitcher({ user, locations, selectedLocationId, 
   const selected = locations.find((l) => l.id === selectedLocationId)
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={ref} data-tour="location-switcher">
       <button
         onClick={() => setOpen((o) => !o)}
         className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 font-medium flex items-center gap-2 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"

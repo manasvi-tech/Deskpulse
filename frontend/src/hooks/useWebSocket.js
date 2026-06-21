@@ -27,6 +27,9 @@ export function useWebSocket() {
       let msg
       try { msg = JSON.parse(raw) } catch { return }
 
+      // Dispatch for tour integration (waitForLiveEvent in useTour.js)
+      window.dispatchEvent(new CustomEvent('deskpulse-ws-event', { detail: msg }))
+
       const store = useStore.getState()
 
       switch (msg.type) {

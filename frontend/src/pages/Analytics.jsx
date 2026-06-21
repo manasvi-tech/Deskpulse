@@ -386,7 +386,7 @@ export default function Analytics() {
       {!accessDenied && (
         <>
           <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 bg-white rounded-xl p-5 border border-slate-200">
+            <div className="col-span-2 bg-white rounded-xl p-5 border border-slate-200" data-tour="heatmap">
               <h2 className="text-slate-900 font-semibold mb-4">Peak Hours Heatmap (Last 7 Days)</h2>
               {analyticsLoading ? <SkeletonBlock h="h-64" /> : <PeakHoursHeatmap heatmapData={heatmapData} />}
             </div>
@@ -417,13 +417,13 @@ export default function Analytics() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-5 border border-slate-200">
+          <div className="bg-white rounded-xl p-5 border border-slate-200" data-tour="revenue-chart">
             <h2 className="text-slate-900 font-semibold mb-4">Daily Revenue (₹)</h2>
             {analyticsLoading ? <SkeletonBlock h="h-52" /> : <RevenueChart revenueData={revenueData} />}
           </div>
 
           <div className={`grid gap-6 ${user?.role !== 'frontdesk' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <div className="bg-white rounded-xl p-5 border border-slate-200">
+            <div className="bg-white rounded-xl p-5 border border-slate-200" data-tour="churn-panel">
               <h2 className="text-slate-900 font-semibold mb-3">Churn Risk Members</h2>
               {analyticsLoading ? <SkeletonBlock h="h-48" /> : <ChurnPanel churnRisk={churnRisk} />}
             </div>

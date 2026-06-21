@@ -17,6 +17,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useLocationData } from '../hooks/useLocationData'
 import { useAnomalies } from '../hooks/useAnomalies'
+import { useTour } from '../hooks/useTour'
 import useStore from '../store/useStore'
 import DemoBanner from './DemoBanner'
 import LocationSwitcher from './LocationSwitcher'
@@ -46,9 +47,15 @@ export default function Layout() {
   const { activeCount }                = useAnomalies()
   const [membersOpen, setMembersOpen]  = useState(false)
   const [tooltip, setTooltip]          = useState({ label: '', y: 0 })
+  const setStartTour                   = useStore((s) => s.setStartTour)
+  const { startTour }                  = useTour(user, navigate)
 
   useWebSocket()
   useLocationData()
+
+  useEffect(() => {
+    setStartTour(startTour)
+  }, [startTour, setStartTour])
 
   // Auto-pin frontdesk to their assigned location
   useEffect(() => {
@@ -165,6 +172,7 @@ export default function Layout() {
           {/* Members — expandable, both roles */}
           <div onMouseEnter={(e) => showTooltip(e, 'Members')} onMouseLeave={hideTooltip}>
             <button
+              data-tour="members-nav"
               onClick={() => sidebarExpanded && setMembersOpen((o) => !o)}
               className={`w-full ${navItemCls(isMembersActive)}`}
             >

@@ -181,7 +181,7 @@ export default function Anomalies() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden" data-testid="anomaly-table">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden" data-testid="anomaly-table" data-tour="anomaly-table">
         {loading ? (
           <div className="p-6 space-y-3">
             {[...Array(4)].map((_, i) => (

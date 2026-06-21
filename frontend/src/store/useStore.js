@@ -85,6 +85,10 @@ const useStore = create((set) => ({
   sidebarExpanded: false,
   toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
 
+  // ── Tour ──────────────────────────────────────────────────────────────────────
+  startTour: null,
+  setStartTour: (fn) => set({ startTour: fn }),
+
   // ── Simulator ─────────────────────────────────────────────────────────────────
   simulatorStatus: 'stopped',
   simulatorSpeed: 1,

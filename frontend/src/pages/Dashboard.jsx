@@ -4,6 +4,8 @@ import useStore from '../store/useStore'
 import { useAuth } from '../hooks/useAuth'
 import { useCountUp } from '../hooks/useCountUp'
 
+const TOUR_KEY = 'deskpulse_tour_completed'
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function occupancyColor(pct) {
@@ -63,7 +65,7 @@ function SummaryBar({ locations }) {
   const animAnomalies = useCountUp(activeAnomalyCount)
 
   return (
-    <div className="grid grid-cols-3 gap-4 mb-6">
+    <div className="grid grid-cols-3 gap-4 mb-6" data-tour="summary-bar">
       <KpiCard
         label="Members Currently Checked In (All Locations)"
         value={animCheckins.toLocaleString('en-IN')}
@@ -92,7 +94,7 @@ function OccupancyCard({ location, wsConnected }) {
   const animPct       = useCountUp(pct)
 
   return (
-    <div className="bg-white rounded-xl p-5 border border-slate-200">
+    <div className="bg-white rounded-xl p-5 border border-slate-200" data-tour="live-occupancy">
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-slate-500 text-sm font-medium">Live Occupancy</p>
@@ -194,7 +196,7 @@ function ActivityFeed() {
   const feed = useStore((s) => s.activityFeed)
 
   return (
-    <div className="bg-white rounded-xl p-5 border border-slate-200 flex flex-col h-full">
+    <div className="bg-white rounded-xl p-5 border border-slate-200 flex flex-col h-full" data-tour="activity-feed">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-slate-900 font-semibold">Live Activity Feed</h2>
         <span className="text-slate-400 text-xs">{feed.length} events</span>
@@ -222,6 +224,7 @@ function ActivityFeed() {
 export default function Dashboard() {
   const { user }           = useAuth()
   const locations          = useStore((s) => s.locations)
+  const storeTourStart     = useStore((s) => s.startTour)
   const locationsLoading   = useStore((s) => s.locationsLoading)
   const locationsError     = useStore((s) => s.locationsError)
   const selectedLocationId = useStore((s) => s.selectedLocationId)
@@ -255,8 +258,22 @@ export default function Dashboard() {
     )
   }
 
+  const handleRestartTour = () => {
+    localStorage.setItem(TOUR_KEY, 'false')
+    if (storeTourStart) storeTourStart()
+  }
+
   return (
     <div className="p-6 space-y-6">
+      <div className="flex justify-end">
+        <button
+          onClick={handleRestartTour}
+          className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer underline"
+        >
+          Restart tour
+        </button>
+      </div>
+
       {locationsLoading ? (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <SkeletonKpi /><SkeletonKpi /><SkeletonKpi />
