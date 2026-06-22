@@ -5,21 +5,10 @@
     ".css": "text/css",
     ".html": "text/html",
     ".json": "application/json",
-    ".svg": "image/svg+xml",
-    ".woff": "font/woff",
-    ".woff2": "font/woff2"
+    ".svg": "image/svg+xml"
   },
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/api/*"]
-  },
-  "routes": [
-    {
-      "route": "/api/*",
-      "allowedRoles": ["anonymous"]
-    }
-  ],
-  "globalHeaders": {
-    "Cache-Control": "no-cache"
+    "exclude": ["/assets/*", "/*.js", "/*.css", "/*.svg", "/*.json", "/*.ico"]
   }
 }
