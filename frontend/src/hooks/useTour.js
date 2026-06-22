@@ -10,44 +10,45 @@ function cleanupDriverDOM() {
   document.querySelectorAll('.driver-popover').forEach((el) => el.remove())
 }
 
-function waitForLiveEvent() {
+const waitForLiveEvent = (timeoutMs = 6000) => {
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, 8000)
-    const handleMessage = (event) => {
-      const data = event.detail
-      if (['CHECKIN_EVENT', 'CHECKOUT_EVENT', 'PAYMENT_EVENT'].includes(data?.type)) {
-        clearTimeout(timeout)
-        window.removeEventListener('deskpulse-ws-event', handleMessage)
-        resolve()
+    let resolved = false
+
+    const cleanup = () => {
+      window.removeEventListener('deskpulse-ws-event', handler)
+      clearTimeout(fallback)
+    }
+
+    const handler = (e) => {
+      const type = e?.detail?.type
+      if (
+        type === 'CHECKIN_EVENT' ||
+        type === 'CHECKOUT_EVENT' ||
+        type === 'PAYMENT_EVENT'
+      ) {
+        if (!resolved) {
+          resolved = true
+          cleanup()
+          resolve('event')
+        }
       }
     }
-    window.addEventListener('deskpulse-ws-event', handleMessage)
+
+    const fallback = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        cleanup()
+        resolve('timeout')
+      }
+    }, timeoutMs)
+
+    window.addEventListener('deskpulse-ws-event', handler)
   })
 }
 
 // ── Step builders ─────────────────────────────────────────────────────────────
 
-function buildAdminSteps(navigate, driverRef, markDone) {
-  const destroyTour = () => {
-    const d = driverRef.current
-    driverRef.current = null
-    if (d) { try { d.destroy() } catch (_) {} }
-    cleanupDriverDOM()
-  }
-
-  // X on non-final steps: show confirm dialog
-  const closeHandlerNonFinal = () => {
-    const ok = window.confirm(CONFIRM_MSG)
-    if (ok) { markDone(); destroyTour() }
-    // if !ok, do nothing - driver stays open
-  }
-
-  // X on final step: close silently, no dialog
-  const closeHandlerFinal = () => {
-    markDone()
-    destroyTour()
-  }
-
+function buildAdminSteps(navigate, driverRef) {
   const goTo = (path) => {
     navigate(path)
     setTimeout(() => driverRef.current?.moveNext(), 600)
@@ -60,7 +61,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         title: 'Welcome to DeskPulse',
         description:
           'Real-time operations intelligence for co-working space chains. This quick tour will walk you through what you can see and do as a Super Admin. You have full visibility across all 10 locations.',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 1 - Summary bar
@@ -71,7 +71,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         description:
           "This bar shows what is happening across all 10 locations right now. Total members currently in office, today's revenue, and the count of active alerts requiring attention. All update live via WebSocket.",
         side: 'bottom',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 2 - Location switcher
@@ -83,7 +82,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
           'As Super Admin you can view any of the 10 locations. Click to open the dropdown and switch - all dashboard widgets update instantly without a page reload.',
         side: 'bottom',
         align: 'end',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 3 - Live occupancy
@@ -94,7 +92,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         description:
           'Shows how many members are currently in the selected location as a count and percentage of capacity. Color changes from green to amber to red as the space fills up. Updates within 1 second of any check-in or checkout event.',
         side: 'right',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 4 - Activity feed → navigate to simulator on next
@@ -106,7 +103,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
           'Every check-in, checkout, and membership payment appears here in real time across all locations. Let us start the simulator so you can see this fill up with live events.',
         side: 'left',
         onNextClick: () => goTo('/simulator'),
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 5 - Simulator controls → navigate to dashboard and wait for live event on next
@@ -120,10 +116,18 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         nextBtnText: 'I started it, show me →',
         onNextClick: async () => {
           navigate('/dashboard')
-          await waitForLiveEvent()
+          await new Promise((r) => setTimeout(r, 600))
+          const result = await waitForLiveEvent(6000)
+          console.log('[tour] live event wait result:', result)
           driverRef.current?.moveNext()
         },
-        onCloseClick: closeHandlerNonFinal,
+      },
+      onHighlightStarted: (element) => {
+        if (element) {
+          element.style.pointerEvents = 'auto'
+          element.style.position = 'relative'
+          element.style.zIndex = '9999'
+        }
       },
     },
     // 6 - Activity feed (live events flowing) → navigate to anomalies on next
@@ -135,7 +139,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
           'Watch the activity feed update in real time as the simulator runs. Every check-in, checkout, and payment appears here within 1 second of the event being recorded in the database. This is powered by WebSocket - no polling, no page refreshes.',
         side: 'left',
         onNextClick: () => goTo('/anomalies'),
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 7 - Anomaly table → navigate to analytics on next
@@ -147,7 +150,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
           'The system checks every 30 seconds for 4 conditions: locations with no activity, spaces over 90% capacity, revenue drops vs last week, and high no-show rates. Warnings can be dismissed. Critical alerts cannot. The badge in the sidebar updates live.',
         side: 'bottom',
         onNextClick: () => goTo('/analytics'),
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 8 - Heatmap
@@ -158,7 +160,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         description:
           'Shows check-in patterns across every hour of every day for the last 7 days at the selected location. Identify your busiest periods at a glance - darker cells mean more activity.',
         side: 'bottom',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 9 - Revenue chart
@@ -169,7 +170,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         description:
           'Daily revenue broken down by membership plan - day pass, hot desk, dedicated desk, and private office. Use the date range selector to switch between 7, 30, and 90 day views.',
         side: 'top',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 10 - Churn panel → navigate to members on next
@@ -181,7 +181,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
           'Members whose memberships are expiring within 7 days, and members who have not checked in for 30+ days. Proactive visibility so you can reach out before losing them.',
         side: 'top',
         onNextClick: () => goTo('/members'),
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 11 - Members list
@@ -192,7 +191,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         description:
           'Search and manage all 1,500 members across every location. Click any member to view their details, check them in or out manually, renew their membership, or change their plan.',
         side: 'right',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 12 - Member detail
@@ -203,7 +201,6 @@ function buildAdminSteps(navigate, driverRef, markDone) {
         description:
           'Select any member from the list to see their current check-in status, active membership, expiry date, and quick actions. Renewal and plan changes happen here - the revenue ticker on the dashboard updates the moment a payment is recorded.',
         side: 'left',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 13 - Members nav (FINAL STEP)
@@ -215,30 +212,12 @@ function buildAdminSteps(navigate, driverRef, markDone) {
           'The Members section in the sidebar is your home for everything membership-related - adding new members, managing existing ones, handling check-ins and checkouts, and renewing plans. Explore freely. You can restart this tour anytime from the dashboard.',
         side: 'right',
         doneBtnText: 'Got it, let me explore',
-        onCloseClick: closeHandlerFinal,
       },
     },
   ]
 }
 
-function buildFrontdeskSteps(navigate, driverRef, markDone) {
-  const destroyTour = () => {
-    const d = driverRef.current
-    driverRef.current = null
-    if (d) { try { d.destroy() } catch (_) {} }
-    cleanupDriverDOM()
-  }
-
-  const closeHandlerNonFinal = () => {
-    const ok = window.confirm(CONFIRM_MSG)
-    if (ok) { markDone(); destroyTour() }
-  }
-
-  const closeHandlerFinal = () => {
-    markDone()
-    destroyTour()
-  }
-
+function buildFrontdeskSteps(navigate, driverRef) {
   const goTo = (path) => {
     navigate(path)
     setTimeout(() => driverRef.current?.moveNext(), 600)
@@ -251,7 +230,6 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
         title: 'Welcome to DeskPulse',
         description:
           'You are logged in as frontdesk staff. You have full visibility of your assigned location and can manage members, handle check-ins and checkouts, and view anomalies for your space.',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 1 - Summary bar
@@ -262,7 +240,6 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
         description:
           "Current occupancy, today's revenue, and active alerts - all for your assigned location.",
         side: 'bottom',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 2 - Live occupancy
@@ -273,7 +250,6 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
         description:
           'How many members are in your space right now as a count and percentage. Updates within 1 second of any check-in or checkout.',
         side: 'right',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 3 - Activity feed → navigate to anomalies on next
@@ -285,7 +261,6 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
           'Every event at your location appears here in real time - check-ins, checkouts, and payments.',
         side: 'left',
         onNextClick: () => goTo('/anomalies'),
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 4 - Anomaly table → navigate to members on next
@@ -297,7 +272,6 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
           'Automated alerts specific to your location. Warning alerts can be dismissed once handled.',
         side: 'bottom',
         onNextClick: () => goTo('/members'),
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 5 - Members list
@@ -308,7 +282,6 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
         description:
           'All members at your location. Search by name or email, click any member to check them in or out, view their membership status, or process a renewal.',
         side: 'right',
-        onCloseClick: closeHandlerNonFinal,
       },
     },
     // 6 - Members nav (FINAL STEP)
@@ -320,7 +293,6 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
           'The Members section is where you will spend most of your time - managing check-ins, checkouts, and memberships for your location. You can restart this tour anytime from the dashboard.',
         side: 'right',
         doneBtnText: 'Got it, let me explore',
-        onCloseClick: closeHandlerFinal,
       },
     },
   ]
@@ -328,7 +300,7 @@ function buildFrontdeskSteps(navigate, driverRef, markDone) {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useTour(user, navigate) {
+export function useTour(user, navigate, isAuthenticated) {
   const driverRef = useRef(null)
 
   const [tourCompleted, setTourCompleted] = useState(
@@ -352,25 +324,37 @@ export function useTour(user, navigate) {
 
     const steps =
       user.role === 'super_admin'
-        ? buildAdminSteps(navigate, driverRef, markDone)
-        : buildFrontdeskSteps(navigate, driverRef, markDone)
+        ? buildAdminSteps(navigate, driverRef)
+        : buildFrontdeskSteps(navigate, driverRef)
 
     const d = driver({
       animate: true,
       overlayOpacity: 0.75,
-      stagePadding: 10,
-      allowClose: false,
+      stagePadding: 8,
+      stageRadius: 8,
+      allowClose: true,
       allowKeyboardControl: false,
+      showButtons: ['next', 'previous', 'close'],
       nextBtnText: 'Next →',
       prevBtnText: '← Back',
       doneBtnText: 'Got it, let me explore',
-      onComplete: () => {
-        // Fires when "Got it, let me explore" is clicked on the final step.
-        // driver.js auto-destroys after this callback returns - we just mark
-        // done and schedule DOM cleanup after driver finishes its own teardown.
-        markDone()
-        driverRef.current = null
-        requestAnimationFrame(cleanupDriverDOM)
+      onDestroyStarted: () => {
+        if (!d.hasNextStep()) {
+          // Final step done button or X on last step — complete silently
+          markDone()
+          d.destroy()
+          driverRef.current = null
+          requestAnimationFrame(cleanupDriverDOM)
+          return
+        }
+        // Mid-tour X click — confirm before skipping
+        const confirmed = window.confirm(CONFIRM_MSG)
+        if (confirmed) {
+          markDone()
+          d.destroy()
+          driverRef.current = null
+          requestAnimationFrame(cleanupDriverDOM)
+        }
       },
       steps,
     })
@@ -379,13 +363,20 @@ export function useTour(user, navigate) {
     d.drive()
   }, [user?.role, navigate, markDone])
 
-  // Auto-start on first login
+  // Auto-start on first login once auth is confirmed
   useEffect(() => {
-    if (!user?.id) return
-    if (localStorage.getItem(TOUR_KEY) === 'true') return
-    const timer = setTimeout(startTour, 1000)
+    if (!user) return
+    if (!isAuthenticated) return
+
+    const completed = localStorage.getItem(TOUR_KEY)
+    if (completed === 'true') return
+
+    const timer = setTimeout(() => {
+      startTour(user)
+    }, 1500)
+
     return () => clearTimeout(timer)
-  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { startTour, tourCompleted }
 }

@@ -35,7 +35,7 @@ const PAGE_TITLES = {
 }
 
 export default function Layout() {
-  const { user, logout }              = useAuth()
+  const { user, isAuthenticated, logout } = useAuth()
   const navigate                       = useNavigate()
   const { pathname }                   = useLocation()
   const locations                      = useStore((s) => s.locations)
@@ -48,7 +48,7 @@ export default function Layout() {
   const [membersOpen, setMembersOpen]  = useState(false)
   const [tooltip, setTooltip]          = useState({ label: '', y: 0 })
   const setStartTour                   = useStore((s) => s.setStartTour)
-  const { startTour }                  = useTour(user, navigate)
+  const { startTour }                  = useTour(user, navigate, isAuthenticated)
 
   useWebSocket()
   useLocationData()
@@ -173,7 +173,10 @@ export default function Layout() {
           <div onMouseEnter={(e) => showTooltip(e, 'Members')} onMouseLeave={hideTooltip}>
             <button
               data-tour="members-nav"
-              onClick={() => sidebarExpanded && setMembersOpen((o) => !o)}
+              onClick={() => {
+                navigate('/members')
+                if (sidebarExpanded) setMembersOpen((o) => !o)
+              }}
               className={`w-full ${navItemCls(isMembersActive)}`}
             >
               <UserCheck size={18} className="shrink-0" />

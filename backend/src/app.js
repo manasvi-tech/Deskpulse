@@ -26,7 +26,10 @@ const app    = express();
 const server = http.createServer(app);
 const PORT   = process.env.PORT || 3001;
 
-// ── Helmet — security headers, FIRST middleware ───────────────────────────────
+// ── Health check — ABSOLUTE FIRST: no auth, no rate limit, no demoGuard ─────
+app.use('/api/health', healthRouter);
+
+// ── Helmet — security headers ─────────────────────────────────────────────────
 app.use(helmet({
   crossOriginEmbedderPolicy: false, // React assets cross-origin
   contentSecurityPolicy:     false, // React SPA handles its own CSP
@@ -76,9 +79,6 @@ const demoGuard = (req, res, next) => {
   next();
 };
 app.use(demoGuard);
-
-// ── Health check — public, no auth required ───────────────────────────────────
-app.use('/api/health', healthRouter);
 
 // ── HTTP request logging (skips /api/health — fires every 30s) ───────────────
 const morganMiddleware = morgan(

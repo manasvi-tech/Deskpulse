@@ -49,8 +49,8 @@ const _state = {
 
 // ── Testable time utilities ───────────────────────────────────────────────────
 const _time = {
-  getHour: () => new Date().getHours(),
-  getDow:  () => new Date().getDay(),
+  getHour: () => new Date().getUTCHours(),
+  getDow:  () => new Date().getUTCDay(),
 };
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -138,6 +138,7 @@ async function simulateCheckin() {
     ? Math.round((newOccupancy / location.capacity) * 1000) / 10
     : 0;
 
+  logger.info({ location_id: location.id, member_name: member.name, occupancy: newOccupancy }, '[simulator] Broadcasting CHECKIN_EVENT');
   broadcastCheckin({
     location_id:       location.id,
     member_name:       member.name,
@@ -179,6 +180,7 @@ async function simulateCheckout() {
     ? Math.round((newOccupancy / ci.capacity) * 1000) / 10
     : 0;
 
+  logger.info({ location_id: ci.location_id, member_name: ci.member_name, occupancy: newOccupancy }, '[simulator] Broadcasting CHECKOUT_EVENT');
   broadcastCheckout({
     location_id:       ci.location_id,
     member_name:       ci.member_name,
@@ -226,6 +228,7 @@ async function simulatePayment() {
     [location.id]
   );
 
+  logger.info({ location_id: location.id, member_name: memberName, amount, plan_type }, '[simulator] Broadcasting PAYMENT_EVENT');
   broadcastPayment({
     location_id:  location.id,
     amount,
@@ -244,15 +247,20 @@ async function simulatePayment() {
  */
 async function tick() {
   try {
-    const hw = getHourWeight();
-    const dw = getDowWeight();
+    const hw   = getHourWeight();
+    const dw   = getDowWeight();
+    const hour = _time.getHour();
+    const dow  = _time.getDow();
 
     // Speed factor: 10x = full probability, 5x = 70%, 1x = 30%
     const sf          = _state.speed === 10 ? 1.0 : _state.speed === 5 ? 0.7 : 0.3;
     const probability = hw * dw * sf;
+    const roll        = Math.random();
+
+    logger.debug({ hour, dow, hourWeight: hw, dowWeight: dw, speedFactor: sf, threshold: probability, roll }, '[simulator] Tick');
 
     // Skip this tick — realistic dead-hour behaviour
-    if (Math.random() >= probability) return;
+    if (roll >= probability) return;
 
     const r = Math.random();
     if (r < 0.55)      await simulateCheckin();
