@@ -82,13 +82,13 @@ describe('broadcastCheckin()', () => {
     serverMock.getWSS.mockReturnValue(mockWSS([client]));
 
     broadcast.broadcastCheckin({
-      gym_id: 'g1', member_name: 'Rahul', timestamp: '2024-01-01T08:00:00Z',
+      location_id: 'g1', member_name: 'Rahul', timestamp: '2024-01-01T08:00:00Z',
       current_occupancy: 50, capacity_pct: 25.0,
     });
 
     const msg = JSON.parse(client.send.mock.calls[0][0]);
     expect(msg.type).toBe('CHECKIN_EVENT');
-    expect(msg.gym_id).toBe('g1');
+    expect(msg.location_id).toBe('g1');
     expect(msg.member_name).toBe('Rahul');
     expect(msg).toHaveProperty('current_occupancy', 50);
     expect(msg).toHaveProperty('capacity_pct', 25.0);
@@ -103,13 +103,13 @@ describe('broadcastCheckout()', () => {
     serverMock.getWSS.mockReturnValue(mockWSS([client]));
 
     broadcast.broadcastCheckout({
-      gym_id: 'g1', member_name: 'Priya', timestamp: '2024-01-01T09:00:00Z',
+      location_id: 'g1', member_name: 'Priya', timestamp: '2024-01-01T09:00:00Z',
       current_occupancy: 48, capacity_pct: 24.0,
     });
 
     const msg = JSON.parse(client.send.mock.calls[0][0]);
     expect(msg.type).toBe('CHECKOUT_EVENT');
-    expect(msg.gym_id).toBe('g1');
+    expect(msg.location_id).toBe('g1');
     expect(msg.member_name).toBe('Priya');
   });
 });
@@ -122,14 +122,14 @@ describe('broadcastPayment()', () => {
     serverMock.getWSS.mockReturnValue(mockWSS([client]));
 
     broadcast.broadcastPayment({
-      gym_id: 'g1', amount: 1499, plan_type: 'monthly',
+      location_id: 'g1', amount: 3999, plan_type: 'hot_desk',
       member_name: 'Ankit', today_total: 45000,
     });
 
     const msg = JSON.parse(client.send.mock.calls[0][0]);
     expect(msg.type).toBe('PAYMENT_EVENT');
-    expect(msg.amount).toBe(1499);
-    expect(msg.plan_type).toBe('monthly');
+    expect(msg.amount).toBe(3999);
+    expect(msg.plan_type).toBe('hot_desk');
     expect(msg.today_total).toBe(45000);
   });
 });
@@ -142,15 +142,15 @@ describe('broadcastAnomalyDetected()', () => {
     serverMock.getWSS.mockReturnValue(mockWSS([client]));
 
     broadcast.broadcastAnomalyDetected({
-      anomaly_id: 'a1', gym_id: 'g1', gym_name: 'WTF Bandra',
-      anomaly_type: 'capacity_breach', severity: 'critical',
+      anomaly_id: 'a1', location_id: 'g1', location_name: 'DeskPulse Bandra',
+      anomaly_type: 'overbooking', severity: 'critical',
       message: 'At 95% capacity',
     });
 
     const msg = JSON.parse(client.send.mock.calls[0][0]);
     expect(msg.type).toBe('ANOMALY_DETECTED');
     expect(msg.anomaly_id).toBe('a1');
-    expect(msg.anomaly_type).toBe('capacity_breach');
+    expect(msg.anomaly_type).toBe('overbooking');
     expect(msg.severity).toBe('critical');
   });
 });
@@ -164,7 +164,7 @@ describe('broadcastAnomalyResolved()', () => {
 
     const resolvedAt = new Date().toISOString();
     broadcast.broadcastAnomalyResolved({
-      anomaly_id: 'a1', gym_id: 'g1', resolved_at: resolvedAt,
+      anomaly_id: 'a1', location_id: 'g1', resolved_at: resolvedAt,
     });
 
     const msg = JSON.parse(client.send.mock.calls[0][0]);

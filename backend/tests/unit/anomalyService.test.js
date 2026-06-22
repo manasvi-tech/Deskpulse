@@ -20,8 +20,8 @@ const pool = require('../../src/db/pool');
 const broadcast = require('../../src/websocket/broadcast');
 
 const {
-  detectZeroCheckins,
-  detectCapacityBreach,
+  detectNoActivity,
+  detectOverbooking,
   detectRevenueDrop,
   detectAllAnomalies,
   _time,
@@ -34,7 +34,7 @@ function queueQueries(...results) {
   results.forEach((r) => pool.query.mockResolvedValueOnce(r));
 }
 
-const GYM_OPEN = { id: 'g1', name: 'Test Gym', opens_at: '06:00', closes_at: '22:00' };
+const LOC_OPEN = { id: 'g1', name: 'Test Location', opens_at: '06:00', closes_at: '22:00' };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -58,27 +58,27 @@ function setCurrentTime(hours, minutes = 0) {
   _time.getNowMinutes = () => hours * 60 + minutes;
 }
 
-// ── zero_checkins ─────────────────────────────────────────────────────────────
+// ── no_activity ───────────────────────────────────────────────────────────────
 
-describe('detectZeroCheckins', () => {
-  it('fires a WARNING anomaly when an active gym has 0 check-ins in last 2h during operating hours', async () => {
+describe('detectNoActivity', () => {
+  it('fires a WARNING anomaly when an active location has 0 check-ins in last 2h during operating hours', async () => {
     setCurrentTime(9); // 09:00 — inside 06:00–22:00
 
     queueQueries(
-      { rows: [GYM_OPEN] },          // getAllGyms
+      { rows: [LOC_OPEN] },          // getAllLocations
       { rows: [{ cnt: 0 }] },        // no recent check-ins
       { rows: [] },                   // no existing anomaly
       { rows: [{ id: 'a1' }] }        // INSERT anomaly
     );
 
-    await detectZeroCheckins();
+    await detectNoActivity();
 
     expect(broadcast.broadcastAnomalyDetected).toHaveBeenCalledTimes(1);
     expect(broadcast.broadcastAnomalyDetected).toHaveBeenCalledWith(
       expect.objectContaining({
-        anomaly_type: 'zero_checkins',
+        anomaly_type: 'no_activity',
         severity:     'warning',
-        gym_id:       'g1',
+        location_id:  'g1',
       })
     );
   });
@@ -87,14 +87,14 @@ describe('detectZeroCheckins', () => {
     setCurrentTime(3); // 03:00 — outside 06:00–22:00
 
     queueQueries(
-      { rows: [GYM_OPEN] } // getAllGyms — time check skips this gym
+      { rows: [LOC_OPEN] } // getAllLocations — time check skips this location
     );
 
-    await detectZeroCheckins();
+    await detectNoActivity();
 
     // Should never query for check-ins or create an anomaly
     expect(broadcast.broadcastAnomalyDetected).not.toHaveBeenCalled();
-    // Only the gym list query was made
+    // Only the location list query was made
     expect(pool.query).toHaveBeenCalledTimes(1);
   });
 
@@ -102,12 +102,12 @@ describe('detectZeroCheckins', () => {
     setCurrentTime(9);
 
     queueQueries(
-      { rows: [GYM_OPEN] },
+      { rows: [LOC_OPEN] },
       { rows: [{ cnt: 0 }] },          // no recent check-ins
       { rows: [{ id: 'existing-a' }] } // existing open anomaly → skip INSERT
     );
 
-    await detectZeroCheckins();
+    await detectNoActivity();
 
     expect(broadcast.broadcastAnomalyDetected).not.toHaveBeenCalled();
   });
@@ -116,16 +116,16 @@ describe('detectZeroCheckins', () => {
     setCurrentTime(9);
 
     queueQueries(
-      { rows: [GYM_OPEN] },          // getAllGyms
+      { rows: [LOC_OPEN] },          // getAllLocations
       { rows: [{ cnt: 3 }] },        // has recent check-ins → resolve
       { rows: [{ id: 'a1' }] }       // UPDATE anomaly SET resolved
     );
 
-    await detectZeroCheckins();
+    await detectNoActivity();
 
     expect(broadcast.broadcastAnomalyResolved).toHaveBeenCalledTimes(1);
     expect(broadcast.broadcastAnomalyResolved).toHaveBeenCalledWith(
-      expect.objectContaining({ anomaly_id: 'a1', gym_id: 'g1' })
+      expect.objectContaining({ anomaly_id: 'a1', location_id: 'g1' })
     );
     expect(broadcast.broadcastAnomalyDetected).not.toHaveBeenCalled();
   });
@@ -134,20 +134,20 @@ describe('detectZeroCheckins', () => {
     setCurrentTime(6, 0); // 06:00 == opensMin, not < opensMin → should check
 
     queueQueries(
-      { rows: [GYM_OPEN] },
+      { rows: [LOC_OPEN] },
       { rows: [{ cnt: 1 }] }, // has activity → resolve (no existing anomaly either)
       { rows: [] }            // no open anomaly to resolve
     );
 
-    await detectZeroCheckins();
+    await detectNoActivity();
     // No detection, no resolution (cnt > 0, no existing anomaly)
     expect(broadcast.broadcastAnomalyDetected).not.toHaveBeenCalled();
   });
 });
 
-// ── capacity_breach ───────────────────────────────────────────────────────────
+// ── overbooking ───────────────────────────────────────────────────────────────
 
-describe('detectCapacityBreach', () => {
+describe('detectOverbooking', () => {
   it('fires a CRITICAL anomaly when occupancy > 90% of capacity', async () => {
     queueQueries(
       { rows: [{ id: 'g1', name: 'Bandra', capacity: 300, occupancy: 285 }] }, // 95%
@@ -155,12 +155,12 @@ describe('detectCapacityBreach', () => {
       { rows: [{ id: 'a2' }] }        // INSERT
     );
 
-    await detectCapacityBreach();
+    await detectOverbooking();
 
     expect(broadcast.broadcastAnomalyDetected).toHaveBeenCalledTimes(1);
     expect(broadcast.broadcastAnomalyDetected).toHaveBeenCalledWith(
       expect.objectContaining({
-        anomaly_type: 'capacity_breach',
+        anomaly_type: 'overbooking',
         severity:     'critical',
       })
     );
@@ -171,18 +171,18 @@ describe('detectCapacityBreach', () => {
       { rows: [{ id: 'g1', name: 'Test', capacity: 100, occupancy: 90 }] } // exactly 90%
     );
 
-    await detectCapacityBreach();
+    await detectOverbooking();
 
     expect(broadcast.broadcastAnomalyDetected).not.toHaveBeenCalled();
   });
 
-  it('does NOT create a duplicate when an open capacity_breach already exists', async () => {
+  it('does NOT create a duplicate when an open overbooking anomaly already exists', async () => {
     queueQueries(
       { rows: [{ id: 'g1', name: 'Test', capacity: 100, occupancy: 95 }] },
       { rows: [{ id: 'existing-a' }] } // existing open anomaly
     );
 
-    await detectCapacityBreach();
+    await detectOverbooking();
 
     expect(broadcast.broadcastAnomalyDetected).not.toHaveBeenCalled();
   });
@@ -193,7 +193,7 @@ describe('detectCapacityBreach', () => {
       { rows: [{ id: 'a2' }] }  // UPDATE SET resolved
     );
 
-    await detectCapacityBreach();
+    await detectOverbooking();
 
     expect(broadcast.broadcastAnomalyResolved).toHaveBeenCalledTimes(1);
     expect(broadcast.broadcastAnomalyResolved).toHaveBeenCalledWith(
@@ -206,7 +206,7 @@ describe('detectCapacityBreach', () => {
       { rows: [{ id: 'g1', name: 'Test', capacity: 100, occupancy: 87 }] }
     );
 
-    await detectCapacityBreach();
+    await detectOverbooking();
 
     expect(broadcast.broadcastAnomalyDetected).not.toHaveBeenCalled();
     expect(broadcast.broadcastAnomalyResolved).not.toHaveBeenCalled();
@@ -218,7 +218,7 @@ describe('detectCapacityBreach', () => {
 describe('detectRevenueDrop', () => {
   it('fires a WARNING when today revenue is < 70% of same weekday last week', async () => {
     queueQueries(
-      { rows: [{ id: 'g1', name: 'Salt Lake' }] },            // getAllGyms
+      { rows: [{ id: 'g1', name: 'Salt Lake' }] },            // getAllLocations
       { rows: [{ today_rev: 1499, last_week_rev: 35991 }] }, // ~4% → below 70%
       { rows: [] },                                           // no existing anomaly
       { rows: [{ id: 'a3' }] }                                // INSERT
@@ -237,7 +237,7 @@ describe('detectRevenueDrop', () => {
 
   it('does NOT fire when today revenue is exactly 70% of last week', async () => {
     queueQueries(
-      { rows: [{ id: 'g1', name: 'Test Gym' }] },
+      { rows: [{ id: 'g1', name: 'Test Location' }] },
       { rows: [{ today_rev: 7000, last_week_rev: 10000 }] } // exactly 70% — NOT < 70%
     );
 
@@ -251,7 +251,7 @@ describe('detectRevenueDrop', () => {
     // The service skips detection but still runs the auto-resolve UPDATE (ratio >= 0.80).
     // That UPDATE returns no rows, so no ANOMALY_RESOLVED broadcast either.
     queueQueries(
-      { rows: [{ id: 'g1', name: 'Test Gym' }] },
+      { rows: [{ id: 'g1', name: 'Test Location' }] },
       { rows: [{ today_rev: 30000, last_week_rev: 35000 }] }, // 85.7%
       { rows: [] }  // auto-resolve UPDATE — no open revenue_drop anomaly to resolve
     );
@@ -262,9 +262,9 @@ describe('detectRevenueDrop', () => {
     expect(broadcast.broadcastAnomalyResolved).not.toHaveBeenCalled();
   });
 
-  it('skips gyms with last_week_rev < ₹1000 (insufficient baseline)', async () => {
+  it('skips locations with last_week_rev < ₹1000 (insufficient baseline)', async () => {
     queueQueries(
-      { rows: [{ id: 'g1', name: 'New Gym' }] },
+      { rows: [{ id: 'g1', name: 'New Location' }] },
       { rows: [{ today_rev: 0, last_week_rev: 500 }] } // too small → skip
     );
 
@@ -275,7 +275,7 @@ describe('detectRevenueDrop', () => {
 
   it('auto-resolves when revenue recovers to ≥ 80% of last week', async () => {
     queueQueries(
-      { rows: [{ id: 'g1', name: 'Test Gym' }] },
+      { rows: [{ id: 'g1', name: 'Test Location' }] },
       { rows: [{ today_rev: 30000, last_week_rev: 35000 }] }, // 85.7% ≥ 80%
       { rows: [{ id: 'a3' }] }                                  // UPDATE resolved
     );
@@ -292,8 +292,8 @@ describe('detectRevenueDrop', () => {
 // ── detectAllAnomalies ────────────────────────────────────────────────────────
 
 describe('detectAllAnomalies', () => {
-  it('runs all three detectors without throwing', async () => {
-    // Set to 3am so zero_checkins skips the gym time check
+  it('runs all detectors without throwing', async () => {
+    // Set to 3am so no_activity skips the location time check
     setCurrentTime(3);
     pool.query.mockResolvedValue({ rows: [] });
 

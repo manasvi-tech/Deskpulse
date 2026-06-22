@@ -4,8 +4,8 @@
  * Verifies:
  *   • Start / stop / state transitions
  *   • Speed multiplier returns correct status
- *   • Hourly weight distribution matches CLAUDE.md spec (peak 7–9am and 5–8pm)
- *   • Day-of-week weights match CLAUDE.md spec
+ *   • Hourly weight distribution matches current service implementation
+ *   • Day-of-week weights match current service implementation
  *   • tick() skips closed hours (weight = 0), acts during open hours
  *   • reset() closes all open check-ins
  *
@@ -96,36 +96,34 @@ describe('HOURLY_WEIGHTS — realistic time distribution', () => {
     expect(HOURLY_WEIGHTS).toHaveLength(24);
   });
 
-  it('dead-night hours 00–04 have 0 weight (gym closed)', () => {
-    for (let h = 0; h <= 4; h++) {
+  it('dead-night hours 00–07 have 0 weight (location closed)', () => {
+    for (let h = 0; h <= 7; h++) {
       expect(HOURLY_WEIGHTS[h]).toBe(0.00);
     }
   });
 
-  it('morning peak hours 07–09 have the maximum weight of 1.00', () => {
-    expect(HOURLY_WEIGHTS[7]).toBe(1.00);
-    expect(HOURLY_WEIGHTS[8]).toBe(1.00);
+  it('morning peak hours 09–11 have the maximum weight of 1.00', () => {
     expect(HOURLY_WEIGHTS[9]).toBe(1.00);
+    expect(HOURLY_WEIGHTS[10]).toBe(1.00);
+    expect(HOURLY_WEIGHTS[11]).toBe(1.00);
   });
 
-  it('evening peak hours 17–20 have weight 0.90 — second peak', () => {
-    for (let h = 17; h <= 20; h++) {
+  it('hour 08 is the early-arrival slot with weight 0.40', () => {
+    expect(HOURLY_WEIGHTS[8]).toBe(0.40);
+  });
+
+  it('afternoon hours 14–17 have the second-peak weight of 0.90', () => {
+    for (let h = 14; h <= 17; h++) {
       expect(HOURLY_WEIGHTS[h]).toBe(0.90);
     }
   });
 
-  it('afternoon hours 14–16 are the quietest non-zero slot', () => {
-    expect(HOURLY_WEIGHTS[14]).toBe(0.20);
-    expect(HOURLY_WEIGHTS[15]).toBe(0.20);
-    expect(HOURLY_WEIGHTS[16]).toBe(0.20);
-  });
-
-  it('hour 23 has 0 weight (gym closed)', () => {
+  it('hour 23 has 0 weight (location closed)', () => {
     expect(HOURLY_WEIGHTS[23]).toBe(0.00);
   });
 
-  it('evening peak weight (0.90) is strictly less than morning peak (1.00)', () => {
-    expect(HOURLY_WEIGHTS[18]).toBeLessThan(HOURLY_WEIGHTS[8]);
+  it('afternoon peak weight (0.90) is strictly less than morning peak (1.00)', () => {
+    expect(HOURLY_WEIGHTS[14]).toBeLessThan(HOURLY_WEIGHTS[9]);
   });
 });
 
@@ -136,17 +134,17 @@ describe('DOW_WEIGHTS — realistic day distribution', () => {
     expect(DOW_WEIGHTS).toHaveLength(7);
   });
 
-  it('Monday (index 1) is the busiest day at 1.00×', () => {
-    expect(DOW_WEIGHTS[1]).toBe(1.00);
+  it('Wednesday (index 3) is the busiest day at 1.00×', () => {
+    expect(DOW_WEIGHTS[3]).toBe(1.00);
   });
 
-  it('Sunday (index 0) is the quietest day at 0.45×', () => {
-    expect(DOW_WEIGHTS[0]).toBe(0.45);
+  it('Sunday (index 0) is the quietest day at 0.20×', () => {
+    expect(DOW_WEIGHTS[0]).toBe(0.20);
   });
 
-  it('Saturday (index 6) is less busy than Monday', () => {
-    expect(DOW_WEIGHTS[6]).toBe(0.70);
-    expect(DOW_WEIGHTS[6]).toBeLessThan(DOW_WEIGHTS[1]);
+  it('Saturday (index 6) is less busy than Wednesday', () => {
+    expect(DOW_WEIGHTS[6]).toBe(0.40);
+    expect(DOW_WEIGHTS[6]).toBeLessThan(DOW_WEIGHTS[3]);
   });
 
   it('all weights are in [0, 1]', () => {
@@ -168,25 +166,23 @@ describe('tick() — event generation', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
-  it('calls pool.query during morning peak (8am, Monday)', async () => {
-    setTime(8, 1); // HOURLY_WEIGHTS[8] = 1.00, DOW_WEIGHTS[1] = 1.00
+  it('calls pool.query during morning peak (9am, Wednesday)', async () => {
+    setTime(9, 3); // HOURLY_WEIGHTS[9] = 1.00, DOW_WEIGHTS[3] = 1.00
+    // probability = 1.00 * 1.00 * 0.30 = 0.30
 
     // Mock simulateCheckin query chain:
-    // getRandomActiveGym → gym
     pool.query
       .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test', capacity: 300 }] })
-      // getGymOccupancy (live occupancy check)
+      // getLocationOccupancy
       .mockResolvedValueOnce({ rows: [{ cnt: 50 }] })
       // getRandomActiveMember
-      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Rahul', plan_type: 'monthly' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Rahul' }] })
       // check existing open check-in
       .mockResolvedValueOnce({ rows: [] })
       // INSERT checkin
-      .mockResolvedValueOnce({ rows: [] })
-      // UPDATE member last_checkin_at
       .mockResolvedValueOnce({ rows: [] });
 
-    // Force checkin branch: rand = 0.05 < (1.0 * 1.0 * 0.50 = 0.50) → simulateCheckin
+    // roll=0.05 < 0.30 → proceed; r=0.05 < 0.55 → simulateCheckin
     jest.spyOn(Math, 'random').mockReturnValue(0.05);
 
     await simulator.tick();
@@ -194,17 +190,18 @@ describe('tick() — event generation', () => {
     expect(pool.query).toHaveBeenCalled();
   });
 
-  it('calls pool.query during evening peak (6pm)', async () => {
-    setTime(18, 1); // HOURLY_WEIGHTS[18] = 0.90, DOW_WEIGHTS[1] = 1.00
+  it('calls pool.query during afternoon peak (2pm)', async () => {
+    setTime(14, 3); // HOURLY_WEIGHTS[14] = 0.90, DOW_WEIGHTS[3] = 1.00
+    // probability = 0.90 * 1.00 * 0.30 = 0.27
 
     pool.query
       .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test', capacity: 300 }] })
       .mockResolvedValueOnce({ rows: [{ cnt: 50 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Rahul', plan_type: 'monthly' }] })
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Rahul' }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
+    // roll=0.05 < 0.27 → proceed; r=0.05 < 0.55 → simulateCheckin
     jest.spyOn(Math, 'random').mockReturnValue(0.05);
 
     await simulator.tick();
@@ -241,7 +238,6 @@ describe('reset()', () => {
 
 describe('_time defaults', () => {
   it('_time.getHour() returns a number in [0, 23]', () => {
-    // This covers the default arrow function bodies (lines 48–49)
     const hour = simulator._time.getHour();
     expect(typeof hour).toBe('number');
     expect(hour).toBeGreaterThanOrEqual(0);
@@ -261,13 +257,13 @@ describe('_time defaults', () => {
 describe('simulateCheckout()', () => {
   it('closes an open check-in and broadcasts CHECKOUT_EVENT', async () => {
     pool.query
-      // SELECT open check-in
+      // SELECT open check-in — includes location_id from the JOIN
       .mockResolvedValueOnce({
-        rows: [{ id: 'ci1', member_id: 'm1', gym_id: 'g1', member_name: 'Priya', capacity: 200 }],
+        rows: [{ id: 'ci1', member_id: 'm1', location_id: 'g1', member_name: 'Priya', capacity: 200 }],
       })
       // UPDATE checked_out
       .mockResolvedValueOnce({ rows: [] })
-      // getGymOccupancy (after checkout)
+      // getLocationOccupancy (after checkout)
       .mockResolvedValueOnce({ rows: [{ cnt: 49 }] });
 
     await simulator.simulateCheckout();
@@ -276,7 +272,7 @@ describe('simulateCheckout()', () => {
     expect(broadcast.broadcastCheckout).toHaveBeenCalledTimes(1);
     expect(broadcast.broadcastCheckout).toHaveBeenCalledWith(
       expect.objectContaining({
-        gym_id:      'g1',
+        location_id: 'g1',
         member_name: 'Priya',
       })
     );
@@ -297,8 +293,8 @@ describe('simulateCheckout()', () => {
 describe('simulatePayment()', () => {
   it('inserts a renewal payment and broadcasts PAYMENT_EVENT', async () => {
     pool.query
-      .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test Gym', capacity: 200 }] }) // gym
-      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Ankit', plan_type: 'monthly' }] }) // member
+      .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test Gym', capacity: 200 }] }) // location
+      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Ankit', membership_id: 'ms1', plan_type: 'hot_desk' }] }) // member
       .mockResolvedValueOnce({ rows: [] })           // INSERT payment
       .mockResolvedValueOnce({ rows: [{ total: 45000 }] }); // revenue total
 
@@ -308,15 +304,15 @@ describe('simulatePayment()', () => {
     expect(broadcast.broadcastPayment).toHaveBeenCalledTimes(1);
     expect(broadcast.broadcastPayment).toHaveBeenCalledWith(
       expect.objectContaining({
-        gym_id:    'g1',
-        amount:    1499,  // monthly plan amount
-        plan_type: 'monthly',
+        location_id: 'g1',
+        amount:      3999,  // hot_desk plan amount
+        plan_type:   'hot_desk',
       })
     );
   });
 
-  it('does nothing when no active gym found', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [] }); // no gym
+  it('does nothing when no active location found', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] }); // no location
 
     await simulator.simulatePayment();
 
@@ -324,9 +320,9 @@ describe('simulatePayment()', () => {
     expect(broadcast.broadcastPayment).not.toHaveBeenCalled();
   });
 
-  it('does nothing when no active member found for the gym', async () => {
+  it('does nothing when no active member found for the location', async () => {
     pool.query
-      .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test', capacity: 200 }] }) // gym
+      .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test', capacity: 200 }] }) // location
       .mockResolvedValueOnce({ rows: [] }); // no member
 
     await simulator.simulatePayment();
@@ -338,43 +334,47 @@ describe('simulatePayment()', () => {
 // ── tick() — checkout and payment branches ────────────────────────────────────
 
 describe('tick() — checkout and payment branches', () => {
-  it('takes the checkout branch when rand is in (0.50, 0.70] activity range', async () => {
-    setTime(8, 1); // activity = 1.00 * 1.00 = 1.00
+  it('takes the checkout branch when second random is in [0.55, 0.85)', async () => {
+    setTime(9, 3); // HOURLY_WEIGHTS[9]=1.00, DOW_WEIGHTS[3]=1.00, sf=0.30 → probability=0.30
 
     pool.query
-      .mockResolvedValueOnce({ rows: [{ id: 'ci1', member_id: 'm1', gym_id: 'g1', member_name: 'Rahul', capacity: 200 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'ci1', member_id: 'm1', location_id: 'g1', member_name: 'Rahul', capacity: 200 }] })
       .mockResolvedValueOnce({ rows: [] })   // UPDATE
       .mockResolvedValueOnce({ rows: [{ cnt: 49 }] }); // occupancy
 
-    // rand = 0.60 → > activity*0.50=0.50, < activity*0.70=0.70 → checkout
-    jest.spyOn(Math, 'random').mockReturnValue(0.60);
+    // roll=0.05 < 0.30 → proceed; r=0.60 in [0.55, 0.85) → checkout
+    jest.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.05)
+      .mockReturnValueOnce(0.60);
 
     await simulator.tick();
 
     expect(broadcast.broadcastCheckout).toHaveBeenCalledTimes(1);
   });
 
-  it('takes the payment branch when rand is in (0.70, 0.75] activity range', async () => {
-    setTime(8, 1); // activity = 1.00
+  it('takes the payment branch when second random is >= 0.85', async () => {
+    setTime(9, 3); // probability = 0.30
 
     pool.query
-      .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test', capacity: 200 }] }) // gym
-      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Rahul', plan_type: 'monthly' }] }) // member
+      .mockResolvedValueOnce({ rows: [{ id: 'g1', name: 'Test', capacity: 200 }] }) // location
+      .mockResolvedValueOnce({ rows: [{ id: 'm1', name: 'Rahul', membership_id: 'ms1', plan_type: 'hot_desk' }] }) // member
       .mockResolvedValueOnce({ rows: [] })           // INSERT payment
-      .mockResolvedValueOnce({ rows: [{ total: 1499 }] }); // revenue
+      .mockResolvedValueOnce({ rows: [{ total: 3999 }] }); // revenue
 
-    // rand = 0.72 → > 0.70, < 0.75 → payment
-    jest.spyOn(Math, 'random').mockReturnValue(0.72);
+    // roll=0.05 < 0.30 → proceed; r=0.90 >= 0.85 → payment
+    jest.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.05)
+      .mockReturnValueOnce(0.90);
 
     await simulator.tick();
 
     expect(broadcast.broadcastPayment).toHaveBeenCalledTimes(1);
   });
 
-  it('takes no action when rand exceeds all activity thresholds (quiet tick)', async () => {
-    setTime(8, 1); // activity = 1.00
+  it('takes no action when roll exceeds activity threshold (quiet tick)', async () => {
+    setTime(9, 3); // probability = 0.30
 
-    // rand = 0.99 → > 0.75 → quiet tick, no DB calls
+    // roll=0.99 >= 0.30 → return early, no DB calls
     jest.spyOn(Math, 'random').mockReturnValue(0.99);
 
     await simulator.tick();

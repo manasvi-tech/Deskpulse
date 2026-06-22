@@ -2,9 +2,9 @@
  * Unit Tests — Stats Service
  *
  * Mocks pg Pool so no live DB is needed.
- * Covers all 9 public functions in statsService.js:
- *   getLiveOccupancy, getTodayRevenue, getAllGymsWithStats,
- *   getGymLive, getGymAnalytics, getCrossGymRevenue,
+ * Covers all public functions in statsService.js:
+ *   getLiveOccupancy, getTodayRevenue, getAllLocationsWithStats,
+ *   getLocationLive, getLocationAnalytics, getCrossLocationRevenue,
  *   getActiveAnomalies, getAnomalyById, dismissAnomaly
  */
 
@@ -25,9 +25,9 @@ function q(...results) {
   results.forEach((r) => pool.query.mockResolvedValueOnce(r));
 }
 
-const GYM = {
-  id: 'gym-1', name: 'WTF Gyms — Test', city: 'Delhi', address: '1 Main St',
-  capacity: 200, status: 'active', opens_at: '06:00', closes_at: '22:00',
+const LOCATION = {
+  id: 'loc-1', name: 'DeskPulse — Test', city: 'Delhi', address: '1 Main St',
+  capacity: 200, status: 'active', opens_at: '08:00', closes_at: '22:00',
 };
 
 beforeEach(() => jest.clearAllMocks());
@@ -35,17 +35,17 @@ beforeEach(() => jest.clearAllMocks());
 // ── getLiveOccupancy ──────────────────────────────────────────────────────────
 
 describe('getLiveOccupancy', () => {
-  it('returns the occupancy count for a gym', async () => {
+  it('returns the occupancy count for a location', async () => {
     q({ rows: [{ occupancy: 42 }] });
-    const result = await stats.getLiveOccupancy('gym-1');
+    const result = await stats.getLiveOccupancy('loc-1');
     expect(result).toBe(42);
     expect(pool.query).toHaveBeenCalledTimes(1);
-    expect(pool.query.mock.calls[0][1]).toEqual(['gym-1']);
+    expect(pool.query.mock.calls[0][1]).toEqual(['loc-1']);
   });
 
   it('returns 0 when no open check-ins exist', async () => {
     q({ rows: [{ occupancy: 0 }] });
-    expect(await stats.getLiveOccupancy('gym-2')).toBe(0);
+    expect(await stats.getLiveOccupancy('loc-2')).toBe(0);
   });
 });
 
@@ -54,61 +54,61 @@ describe('getLiveOccupancy', () => {
 describe('getTodayRevenue', () => {
   it('returns today\'s revenue total', async () => {
     q({ rows: [{ revenue: 15000 }] });
-    const result = await stats.getTodayRevenue('gym-1');
+    const result = await stats.getTodayRevenue('loc-1');
     expect(result).toBe(15000);
   });
 
   it('returns 0 when no payments today', async () => {
     q({ rows: [{ revenue: 0 }] });
-    expect(await stats.getTodayRevenue('gym-1')).toBe(0);
+    expect(await stats.getTodayRevenue('loc-1')).toBe(0);
   });
 });
 
-// ── getAllGymsWithStats ────────────────────────────────────────────────────────
+// ── getAllLocationsWithStats ───────────────────────────────────────────────────
 
-describe('getAllGymsWithStats', () => {
-  it('returns an array of gyms with occupancy and revenue', async () => {
-    const mockGyms = [
-      { ...GYM, occupancy: 50, occupancy_pct: 25.0, today_revenue: 7500 },
-      { ...GYM, id: 'gym-2', name: 'WTF Gyms — Bandra', occupancy: 120, occupancy_pct: 48.0, today_revenue: 12000 },
+describe('getAllLocationsWithStats', () => {
+  it('returns an array of locations with occupancy and revenue', async () => {
+    const mockLocations = [
+      { ...LOCATION, occupancy: 50, occupancy_pct: 25.0, today_revenue: 7500 },
+      { ...LOCATION, id: 'loc-2', name: 'DeskPulse — Bandra', occupancy: 120, occupancy_pct: 48.0, today_revenue: 12000 },
     ];
-    q({ rows: mockGyms });
+    q({ rows: mockLocations });
 
-    const result = await stats.getAllGymsWithStats();
+    const result = await stats.getAllLocationsWithStats();
     expect(result).toHaveLength(2);
     expect(result[0]).toHaveProperty('occupancy', 50);
     expect(result[0]).toHaveProperty('today_revenue', 7500);
   });
 
-  it('returns empty array when no gyms', async () => {
+  it('returns empty array when no locations', async () => {
     q({ rows: [] });
-    const result = await stats.getAllGymsWithStats();
+    const result = await stats.getAllLocationsWithStats();
     expect(result).toEqual([]);
   });
 });
 
-// ── getGymLive ────────────────────────────────────────────────────────────────
+// ── getLocationLive ───────────────────────────────────────────────────────────
 
-describe('getGymLive', () => {
-  it('returns null when gym does not exist', async () => {
-    q({ rows: [] }); // gym lookup returns nothing
-    const result = await stats.getGymLive('00000000-0000-0000-0000-000000000000');
+describe('getLocationLive', () => {
+  it('returns null when location does not exist', async () => {
+    q({ rows: [] }); // location lookup returns nothing
+    const result = await stats.getLocationLive('00000000-0000-0000-0000-000000000000');
     expect(result).toBeNull();
     expect(pool.query).toHaveBeenCalledTimes(1);
   });
 
   it('returns full live snapshot with occupancy, revenue, recent_activity', async () => {
     q(
-      { rows: [GYM] },                                  // gym lookup
+      { rows: [LOCATION] },                                  // location lookup
       { rows: [{ occupancy: 80 }] },                    // live occupancy
       { rows: [{ revenue: 7500 }] },                    // today's revenue
-      { rows: [{ member_name: 'Rahul', checked_in: new Date().toISOString(), checked_out: null, duration_min: null, gym_id: GYM.id }] } // recent activity
+      { rows: [{ member_name: 'Rahul', checked_in: new Date().toISOString(), checked_out: null, duration_min: null, location_id: LOCATION.id }] } // recent activity
     );
 
-    const result = await stats.getGymLive(GYM.id);
+    const result = await stats.getLocationLive(LOCATION.id);
 
     expect(result).not.toBeNull();
-    expect(result.id).toBe(GYM.id);
+    expect(result.id).toBe(LOCATION.id);
     expect(result.occupancy).toBe(80);
     expect(result.today_revenue).toBe(7500);
     expect(Array.isArray(result.recent_activity)).toBe(true);
@@ -117,44 +117,48 @@ describe('getGymLive', () => {
 
   it('calculates occupancy_pct correctly', async () => {
     q(
-      { rows: [{ ...GYM, capacity: 100 }] },
+      { rows: [{ ...LOCATION, capacity: 100 }] },
       { rows: [{ occupancy: 60 }] },
       { rows: [{ revenue: 0 }] },
       { rows: [] }
     );
-    const result = await stats.getGymLive(GYM.id);
+    const result = await stats.getLocationLive(LOCATION.id);
     expect(result.occupancy_pct).toBe(60);
   });
 });
 
-// ── getGymAnalytics ───────────────────────────────────────────────────────────
+// ── getLocationAnalytics ──────────────────────────────────────────────────────
 
-describe('getGymAnalytics', () => {
+describe('getLocationAnalytics', () => {
   const ANALYTICS_ROWS = () => ({
-    heatmap:  [{ day_of_week: 1, hour_of_day: 8, checkin_count: 30 }],
-    revenue:  [{ date: '2024-05-01', revenue: 1499, payment_count: 1 }],
-    churn:    [{ id: 'm1', name: 'Ankit', risk_level: 'HIGH', days_since_checkin: 50 }],
-    members:  { total_members: 500, active_members: 430, inactive_members: 50, frozen_members: 20,
-                monthly_count: 250, quarterly_count: 200, annual_count: 50 },
+    heatmap:       [{ day_of_week: 1, hour_of_day: 8, checkin_count: 30 }],
+    revenue:       [{ date: '2024-05-01', revenue: 1499, payment_count: 1 }],
+    expiring_soon: [{ id: 'm1', name: 'Ankit', plan_type: 'day_pass', days_until_expiry: 3 }],
+    inactive:      [{ id: 'm2', name: 'Priya', plan_type: 'hot_desk', days_since_checkin: 50 }],
+    members:       {
+      total_members: 500, active_members: 430, inactive_members: 50, frozen_members: 20,
+      day_pass_count: 200, hot_desk_count: 150, dedicated_desk_count: 100, private_office_count: 50,
+    },
   });
 
-  it('returns null when gym does not exist', async () => {
-    q({ rows: [] }); // gym lookup
-    const result = await stats.getGymAnalytics('00000000-0000-0000-0000-000000000000', '7d');
+  it('returns null when location does not exist', async () => {
+    q({ rows: [] }); // location lookup
+    const result = await stats.getLocationAnalytics('00000000-0000-0000-0000-000000000000', '7d');
     expect(result).toBeNull();
   });
 
   it('returns analytics object with heatmap, revenue_chart, churn_risk, member_stats for 7d', async () => {
     const r = ANALYTICS_ROWS();
     q(
-      { rows: [GYM] },           // gym check
-      { rows: r.heatmap },       // heatmap
-      { rows: r.revenue },       // revenue chart
-      { rows: r.churn },         // churn risk
-      { rows: [r.members] }      // member stats
+      { rows: [LOCATION] },           // location check
+      { rows: r.heatmap },            // heatmap
+      { rows: r.revenue },            // revenue chart
+      { rows: r.expiring_soon },      // expiring soon churn
+      { rows: r.inactive },           // inactive churn
+      { rows: [r.members] }           // member stats
     );
 
-    const result = await stats.getGymAnalytics(GYM.id, '7d');
+    const result = await stats.getLocationAnalytics(LOCATION.id, '7d');
 
     expect(result).not.toBeNull();
     expect(result).toHaveProperty('heatmap');
@@ -162,46 +166,57 @@ describe('getGymAnalytics', () => {
     expect(result).toHaveProperty('churn_risk');
     expect(result).toHaveProperty('member_stats');
     expect(result.heatmap).toHaveLength(1);
-    expect(result.churn_risk).toHaveLength(1);
+    expect(result.churn_risk).toHaveProperty('expiring_soon');
+    expect(result.churn_risk).toHaveProperty('inactive');
   });
 
   it('works with 30d dateRange', async () => {
     const r = ANALYTICS_ROWS();
-    q({ rows: [GYM] }, { rows: r.heatmap }, { rows: r.revenue }, { rows: r.churn }, { rows: [r.members] });
-    const result = await stats.getGymAnalytics(GYM.id, '30d');
+    q(
+      { rows: [LOCATION] }, { rows: r.heatmap }, { rows: r.revenue },
+      { rows: r.expiring_soon }, { rows: r.inactive }, { rows: [r.members] }
+    );
+    const result = await stats.getLocationAnalytics(LOCATION.id, '30d');
     expect(result).not.toBeNull();
   });
 
   it('works with 90d dateRange', async () => {
     const r = ANALYTICS_ROWS();
-    q({ rows: [GYM] }, { rows: r.heatmap }, { rows: r.revenue }, { rows: r.churn }, { rows: [r.members] });
-    const result = await stats.getGymAnalytics(GYM.id, '90d');
+    q(
+      { rows: [LOCATION] }, { rows: r.heatmap }, { rows: r.revenue },
+      { rows: r.expiring_soon }, { rows: r.inactive }, { rows: [r.members] }
+    );
+    const result = await stats.getLocationAnalytics(LOCATION.id, '90d');
     expect(result).not.toBeNull();
   });
 
   it('member_stats includes plan percentages', async () => {
     const r = ANALYTICS_ROWS();
-    q({ rows: [GYM] }, { rows: r.heatmap }, { rows: r.revenue }, { rows: r.churn }, { rows: [r.members] });
-    const result = await stats.getGymAnalytics(GYM.id, '7d');
-    expect(result.member_stats).toHaveProperty('monthly_pct');
-    expect(result.member_stats).toHaveProperty('quarterly_pct');
-    expect(result.member_stats).toHaveProperty('annual_pct');
+    q(
+      { rows: [LOCATION] }, { rows: r.heatmap }, { rows: r.revenue },
+      { rows: r.expiring_soon }, { rows: r.inactive }, { rows: [r.members] }
+    );
+    const result = await stats.getLocationAnalytics(LOCATION.id, '7d');
+    expect(result.member_stats).toHaveProperty('day_pass_pct');
+    expect(result.member_stats).toHaveProperty('hot_desk_pct');
+    expect(result.member_stats).toHaveProperty('dedicated_desk_pct');
+    expect(result.member_stats).toHaveProperty('private_office_pct');
   });
 });
 
-// ── getCrossGymRevenue ────────────────────────────────────────────────────────
+// ── getCrossLocationRevenue ───────────────────────────────────────────────────
 
-describe('getCrossGymRevenue', () => {
-  it('returns array of gyms with revenue data', async () => {
+describe('getCrossLocationRevenue', () => {
+  it('returns array of locations with revenue data', async () => {
     const mockData = [
-      { gym_id: 'g1', gym_name: 'Bandra', city: 'Mumbai', total_revenue: 50000, payment_count: 35 },
-      { gym_id: 'g2', gym_name: 'Powai',  city: 'Mumbai', total_revenue: 40000, payment_count: 28 },
+      { location_id: 'g1', location_name: 'Bandra', city: 'Mumbai', total_revenue: 50000, payment_count: 35 },
+      { location_id: 'g2', location_name: 'Powai',  city: 'Mumbai', total_revenue: 40000, payment_count: 28 },
     ];
     q({ rows: mockData });
 
-    const result = await stats.getCrossGymRevenue();
+    const result = await stats.getCrossLocationRevenue();
     expect(result).toHaveLength(2);
-    expect(result[0]).toHaveProperty('gym_id');
+    expect(result[0]).toHaveProperty('location_id');
     expect(result[0]).toHaveProperty('total_revenue');
   });
 });
@@ -210,8 +225,8 @@ describe('getCrossGymRevenue', () => {
 
 describe('getActiveAnomalies', () => {
   const ANOMALY = {
-    id: 'a1', gym_id: 'g1', gym_name: 'Test Gym',
-    type: 'zero_checkins', severity: 'warning',
+    id: 'a1', location_id: 'g1', location_name: 'Test Location',
+    type: 'no_activity', severity: 'warning',
     message: 'No check-ins', resolved: false, dismissed: false,
     detected_at: new Date().toISOString(), resolved_at: null,
   };
@@ -229,12 +244,12 @@ describe('getActiveAnomalies', () => {
     expect(result).toEqual([]);
   });
 
-  it('applies gymId filter when provided', async () => {
+  it('applies locationId filter when provided', async () => {
     q({ rows: [ANOMALY] });
-    const result = await stats.getActiveAnomalies({ gymId: 'g1' });
+    const result = await stats.getActiveAnomalies({ locationId: 'g1' });
     expect(result).toHaveLength(1);
     const sql = pool.query.mock.calls[0][0];
-    expect(sql).toContain('gym_id');
+    expect(sql).toContain('location_id');
   });
 
   it('applies severity filter when provided', async () => {
@@ -245,11 +260,11 @@ describe('getActiveAnomalies', () => {
     expect(sql).toContain('severity');
   });
 
-  it('applies both gymId and severity filters together', async () => {
+  it('applies both locationId and severity filters together', async () => {
     q({ rows: [ANOMALY] });
-    await stats.getActiveAnomalies({ gymId: 'g1', severity: 'warning' });
+    await stats.getActiveAnomalies({ locationId: 'g1', severity: 'warning' });
     const sql = pool.query.mock.calls[0][0];
-    expect(sql).toContain('gym_id');
+    expect(sql).toContain('location_id');
     expect(sql).toContain('severity');
   });
 });

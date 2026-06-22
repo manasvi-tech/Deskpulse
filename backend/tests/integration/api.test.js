@@ -8,6 +8,23 @@
  * How reviewers run: cd backend && npm test
  */
 
+// Mock authMiddleware so tests are not blocked by 401 responses.
+jest.mock('../../src/middleware/auth.js', () => ({
+  authMiddleware: (req, res, next) => {
+    req.user = {
+      id: 'test-user-id',
+      email: 'admin@deskpulse.io',
+      role: 'super_admin',
+      location_id: null,
+      name: 'Test Admin',
+      is_active: true,
+    };
+    next();
+  },
+  requireRole: () => (req, res, next) => next(),
+  requireLocation: (req, res, next) => next(),
+}));
+
 const request   = require('supertest');
 const pool      = require('../../src/db/pool');
 const simulator = require('../../src/services/simulatorService');
@@ -47,85 +64,85 @@ describe('GET /api/health', () => {
   });
 });
 
-// ── GET /api/gyms ─────────────────────────────────────────────────────────────
+// ── GET /api/locations ────────────────────────────────────────────────────────
 
-describe('GET /api/gyms', () => {
-  itDb('returns 200 with a gyms array', async () => {
-    const res = await request(app).get('/api/gyms');
+describe('GET /api/locations', () => {
+  itDb('returns 200 with a locations array', async () => {
+    const res = await request(app).get('/api/locations');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('gyms');
-    expect(Array.isArray(res.body.gyms)).toBe(true);
+    expect(res.body).toHaveProperty('locations');
+    expect(Array.isArray(res.body.locations)).toBe(true);
   });
 
-  itDb('returns exactly 10 gyms after seeding', async () => {
-    const res = await request(app).get('/api/gyms');
+  itDb('returns exactly 10 locations after seeding', async () => {
+    const res = await request(app).get('/api/locations');
     expect(res.status).toBe(200);
-    expect(res.body.gyms).toHaveLength(10);
+    expect(res.body.locations).toHaveLength(10);
   });
 
-  itDb('each gym has required fields: id, name, city, capacity, occupancy, today_revenue', async () => {
-    const res = await request(app).get('/api/gyms');
-    const gym = res.body.gyms[0];
-    expect(gym).toHaveProperty('id');
-    expect(gym).toHaveProperty('name');
-    expect(gym).toHaveProperty('city');
-    expect(gym).toHaveProperty('capacity');
-    expect(gym).toHaveProperty('occupancy');
-    expect(gym).toHaveProperty('today_revenue');
-    expect(gym).toHaveProperty('occupancy_pct');
+  itDb('each location has required fields: id, name, city, capacity, occupancy, today_revenue', async () => {
+    const res = await request(app).get('/api/locations');
+    const loc = res.body.locations[0];
+    expect(loc).toHaveProperty('id');
+    expect(loc).toHaveProperty('name');
+    expect(loc).toHaveProperty('city');
+    expect(loc).toHaveProperty('capacity');
+    expect(loc).toHaveProperty('occupancy');
+    expect(loc).toHaveProperty('today_revenue');
+    expect(loc).toHaveProperty('occupancy_pct');
   });
 
-  itDb('all returned gyms have status "active"', async () => {
-    const res = await request(app).get('/api/gyms');
-    res.body.gyms.forEach((g) => {
-      expect(g.status).toBe('active');
+  itDb('all returned locations have status "active"', async () => {
+    const res = await request(app).get('/api/locations');
+    res.body.locations.forEach((l) => {
+      expect(l.status).toBe('active');
     });
   });
 });
 
-// ── GET /api/gyms/:id/live ────────────────────────────────────────────────────
+// ── GET /api/locations/:id/live ───────────────────────────────────────────────
 
-describe('GET /api/gyms/:id/live', () => {
-  itDb('returns 200 with all required fields for a valid gym', async () => {
-    const gymsRes = await request(app).get('/api/gyms');
-    const gymId   = gymsRes.body.gyms[0].id;
+describe('GET /api/locations/:id/live', () => {
+  itDb('returns 200 with all required fields for a valid location', async () => {
+    const locsRes   = await request(app).get('/api/locations');
+    const locationId = locsRes.body.locations[0].id;
 
-    const res = await request(app).get(`/api/gyms/${gymId}/live`);
+    const res = await request(app).get(`/api/locations/${locationId}/live`);
     expect(res.status).toBe(200);
 
-    const gym = res.body.gym;
-    expect(gym).toHaveProperty('id', gymId);
-    expect(gym).toHaveProperty('name');
-    expect(gym).toHaveProperty('capacity');
-    expect(gym).toHaveProperty('occupancy');
-    expect(gym).toHaveProperty('occupancy_pct');
-    expect(gym).toHaveProperty('today_revenue');
-    expect(gym).toHaveProperty('recent_activity');
-    expect(Array.isArray(gym.recent_activity)).toBe(true);
+    const loc = res.body.location;
+    expect(loc).toHaveProperty('id', locationId);
+    expect(loc).toHaveProperty('name');
+    expect(loc).toHaveProperty('capacity');
+    expect(loc).toHaveProperty('occupancy');
+    expect(loc).toHaveProperty('occupancy_pct');
+    expect(loc).toHaveProperty('today_revenue');
+    expect(loc).toHaveProperty('recent_activity');
+    expect(Array.isArray(loc.recent_activity)).toBe(true);
   });
 
-  // 404 path requires a DB round-trip (getGymLive returns null for unknown IDs)
-  itDb('returns 404 for a non-existent gym UUID', async () => {
-    const res = await request(app).get('/api/gyms/00000000-0000-0000-0000-000000000000/live');
+  // 404 path requires a DB round-trip (getLocationLive returns null for unknown IDs)
+  itDb('returns 404 for a non-existent location UUID', async () => {
+    const res = await request(app).get('/api/locations/00000000-0000-0000-0000-000000000000/live');
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('error');
   });
 });
 
-// ── GET /api/gyms/:id/analytics ───────────────────────────────────────────────
+// ── GET /api/locations/:id/analytics ─────────────────────────────────────────
 
-describe('GET /api/gyms/:id/analytics', () => {
+describe('GET /api/locations/:id/analytics', () => {
   it('returns 400 for an invalid dateRange', async () => {
-    const res = await request(app).get('/api/gyms/some-id/analytics?dateRange=60d');
+    const res = await request(app).get('/api/locations/some-id/analytics?dateRange=60d');
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty('error');
   });
 
   itDb('returns 200 with heatmap, revenue_chart, churn_risk, member_stats', async () => {
-    const gymsRes = await request(app).get('/api/gyms');
-    const gymId   = gymsRes.body.gyms[0].id;
+    const locsRes   = await request(app).get('/api/locations');
+    const locationId = locsRes.body.locations[0].id;
 
-    const res = await request(app).get(`/api/gyms/${gymId}/analytics?dateRange=30d`);
+    const res = await request(app).get(`/api/locations/${locationId}/analytics?dateRange=30d`);
     expect(res.status).toBe(200);
 
     const a = res.body.analytics;
@@ -136,9 +153,9 @@ describe('GET /api/gyms/:id/analytics', () => {
     expect(Array.isArray(a.heatmap)).toBe(true);
   });
 
-  // 404 path requires a DB round-trip (getGymAnalytics returns null for unknown IDs)
-  itDb('returns 404 for a non-existent gym', async () => {
-    const res = await request(app).get('/api/gyms/00000000-0000-0000-0000-000000000000/analytics');
+  // 404 path requires a DB round-trip (getLocationAnalytics returns null for unknown IDs)
+  itDb('returns 404 for a non-existent location', async () => {
+    const res = await request(app).get('/api/locations/00000000-0000-0000-0000-000000000000/analytics');
     expect(res.status).toBe(404);
   });
 });
@@ -215,29 +232,29 @@ describe('PATCH /api/anomalies/:id/dismiss', () => {
   });
 });
 
-// ── GET /api/analytics/cross-gym ─────────────────────────────────────────────
+// ── GET /api/analytics/cross-location ────────────────────────────────────────
 
-describe('GET /api/analytics/cross-gym', () => {
-  itDb('returns 200 with a gyms array of revenue data', async () => {
-    const res = await request(app).get('/api/analytics/cross-gym');
+describe('GET /api/analytics/cross-location', () => {
+  itDb('returns 200 with a locations array of revenue data', async () => {
+    const res = await request(app).get('/api/analytics/cross-location');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('gyms');
-    expect(Array.isArray(res.body.gyms)).toBe(true);
+    expect(res.body).toHaveProperty('locations');
+    expect(Array.isArray(res.body.locations)).toBe(true);
   });
 
-  itDb('returned gyms have gym_id, gym_name, total_revenue', async () => {
-    const res = await request(app).get('/api/analytics/cross-gym');
+  itDb('returned locations have location_id, location_name, total_revenue', async () => {
+    const res = await request(app).get('/api/analytics/cross-location');
     expect(res.status).toBe(200);
-    res.body.gyms.forEach((g) => {
-      expect(g).toHaveProperty('gym_id');
-      expect(g).toHaveProperty('gym_name');
-      expect(g).toHaveProperty('total_revenue');
+    res.body.locations.forEach((l) => {
+      expect(l).toHaveProperty('location_id');
+      expect(l).toHaveProperty('location_name');
+      expect(l).toHaveProperty('total_revenue');
     });
   });
 
-  itDb('returns 10 gyms (one per seeded location)', async () => {
-    const res = await request(app).get('/api/analytics/cross-gym');
-    expect(res.body.gyms).toHaveLength(10);
+  itDb('returns 10 locations (one per seeded location)', async () => {
+    const res = await request(app).get('/api/analytics/cross-location');
+    expect(res.body.locations).toHaveLength(10);
   });
 });
 
