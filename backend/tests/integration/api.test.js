@@ -33,6 +33,53 @@ const simulator = require('../../src/services/simulatorService');
 // (require.main === module guard in app.js handles this)
 const { app } = require('../../src/app');
 
+// ── Schema + minimal seed for CI ─────────────────────────────────────────────
+beforeAll(async () => {
+  if (!process.env.DATABASE_URL) return;
+
+  const fs   = require('fs');
+  const path = require('path');
+
+  // Run all migrations in order to create the schema on a fresh CI database.
+  // All migration files use IF NOT EXISTS guards so this is safe to run on
+  // an already-seeded database too.
+  const migrationsDir = path.join(__dirname, '../../src/db/migrations');
+  const files = fs.readdirSync(migrationsDir).sort();
+
+  for (const file of files) {
+    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    try {
+      await pool.query(sql);
+    } catch (err) {
+      // Skip errors for objects that already exist — safe on an existing volume.
+      if (!err.message.includes('already exists')) throw err;
+    }
+  }
+
+  // Seed the 10 canonical locations if the database is empty (CI environment).
+  // This is the minimal data required for count-based integration tests.
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS cnt FROM locations');
+  if (rows[0].cnt === 0) {
+    await pool.query(`
+      INSERT INTO locations
+        (name, city, address,
+         total_hot_desks, total_dedicated_desks, total_private_offices, total_meeting_rooms,
+         opens_at, closes_at, status)
+      VALUES
+        ('Awfis — Koramangala',             'Bengaluru', 'Koramangala, Bengaluru',    60, 30,  8, 4, '08:00', '22:00', 'active'),
+        ('Awfis — Indiranagar',             'Bengaluru', 'Indiranagar, Bengaluru',    45, 20,  6, 3, '08:00', '22:00', 'active'),
+        ('CoWrks — Bandra West',            'Mumbai',    'Bandra West, Mumbai',       80, 40, 12, 6, '07:00', '23:00', 'active'),
+        ('CoWrks — Powai',                  'Mumbai',    'Powai, Mumbai',             65, 30, 10, 4, '07:30', '22:30', 'active'),
+        ('Innov8 — Connaught Place',        'New Delhi', 'Connaught Place, Delhi',    55, 25,  8, 4, '08:00', '22:00', 'active'),
+        ('Innov8 — Lajpat Nagar',           'New Delhi', 'Lajpat Nagar, Delhi',      40, 20,  6, 3, '08:00', '21:30', 'active'),
+        ('91Springboard — Banjara Hills',   'Hyderabad', 'Banjara Hills, Hyderabad',  50, 25,  8, 3, '08:00', '22:00', 'active'),
+        ('91Springboard — Sector 18 Noida', 'Noida',     'Sector 18, Noida',         35, 15,  5, 2, '08:00', '21:30', 'active'),
+        ('BHive — Salt Lake',               'Kolkata',   'Salt Lake, Kolkata',       30, 12,  4, 2, '08:00', '21:00', 'active'),
+        ('BHIVE — Velachery',               'Chennai',   'Velachery, Chennai',       25, 10,  3, 2, '08:00', '21:00', 'active')
+    `);
+  }
+}, 30000);
+
 // ── Global teardown — prevent Jest from hanging on open handles ───────────────
 afterAll(async () => {
   simulator.stop();
