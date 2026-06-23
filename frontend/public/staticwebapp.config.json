@@ -2,19 +2,23 @@
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [
-      "/assets/*.js",
-      "/assets/*.css",
-      "/assets/*.json",
-      "/assets/*.ico",
-      "/assets/*.png",
-      "/assets/*.svg",
-      "/assets/*.woff",
-      "/assets/*.woff2"
+      "/assets/*",
+      "*.js",
+      "*.css",
+      "*.svg",
+      "*.ico",
+      "*.png",
+      "*.json",
+      "*.woff",
+      "*.woff2"
     ]
   },
   "mimeTypes": {
     ".js": "application/javascript",
     ".mjs": "application/javascript",
-    ".css": "text/css"
+    ".css": "text/css",
+    ".html": "text/html",
+    ".json": "application/json",
+    ".svg": "image/svg+xml"
   }
 }
