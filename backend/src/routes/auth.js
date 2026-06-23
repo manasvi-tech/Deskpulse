@@ -45,10 +45,11 @@ router.post('/login', validate(loginSchema), async (req, res) => {
 
     // COOKIE_SECURE=true only in environments with HTTPS termination.
     // Docker local dev uses HTTP, so we default to false even when NODE_ENV=production.
+    const isProd = process.env.NODE_ENV === 'production'
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.COOKIE_SECURE === 'true',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: isProd || process.env.COOKIE_SECURE === 'true',
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 3 * 24 * 60 * 60 * 1000,
     });
 
