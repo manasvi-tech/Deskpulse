@@ -1,8 +1,9 @@
 ﻿import React, { useState } from 'react'
 import useStore from '../store/useStore'
+import { API_BASE } from '../config/api.js'
 
 async function apiPost(path, body = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',

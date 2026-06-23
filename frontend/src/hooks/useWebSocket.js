@@ -5,14 +5,10 @@
 
 import { useEffect, useRef } from 'react'
 import useStore from '../store/useStore'
+import { WS_BASE } from '../config/api.js'
 
 const RECONNECT_DELAY_MS  = 3000
 const MAX_RECONNECT_DELAY = 30_000
-
-function getWsUrl() {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/ws`
-}
 
 export function useWebSocket() {
   const wsRef          = useRef(null)
@@ -105,12 +101,11 @@ export function useWebSocket() {
       if (destroyedRef.current) return
       if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return
 
-      const WS_URL = getWsUrl()
-      console.log(`[WS] Connecting → ${WS_URL}`)
+      console.log(`[WS] Connecting → ${WS_BASE}`)
 
       let ws
       try {
-        ws = new WebSocket(WS_URL)
+        ws = new WebSocket(WS_BASE)
       } catch (err) {
         console.error('[WS] Failed to create WebSocket:', err.message)
         useStore.getState().setWsConnected(false)

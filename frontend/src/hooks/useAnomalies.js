@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import useStore from '../store/useStore'
+import { API_BASE } from '../config/api.js'
 
 function toAnomalyArray(raw) {
   if (Array.isArray(raw)) return raw
@@ -22,7 +23,7 @@ export function useAnomalies() {
 
     async function fetchAnomalies() {
       try {
-        const res = await fetch('/api/anomalies', { credentials: 'include' })
+        const res = await fetch(`${API_BASE}/api/anomalies`, { credentials: 'include' })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const raw = await res.json()
         if (!cancelled) setAnomalies(toAnomalyArray(raw))
@@ -36,7 +37,7 @@ export function useAnomalies() {
   }, [setAnomalies, setAnomaliesError])
 
   const dismiss = async (anomalyId) => {
-    const res = await fetch(`/api/anomalies/${anomalyId}/dismiss`, {
+    const res = await fetch(`${API_BASE}/api/anomalies/${anomalyId}/dismiss`, {
       method: 'PATCH',
       credentials: 'include',
     })

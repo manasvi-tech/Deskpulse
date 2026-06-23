@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import useStore from '../store/useStore'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { API_BASE } from '../config/api.js'
 
 /** Coerce any API response shape into a plain array of gym objects. */
 function toGymArray(raw) {

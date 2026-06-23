@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { DemoModal } from '../components/DemoModal'
 import useStore from '../store/useStore'
+import { API_BASE } from '../config/api.js'
 
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true'
 
@@ -133,7 +134,7 @@ export default function Members() {
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (locationFilter)  params.set('location_id', locationFilter)
 
-    fetch(`/api/members?${params}`, { credentials: 'include' })
+    fetch(`${API_BASE}/api/members?${params}`, { credentials: 'include' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -168,7 +169,7 @@ export default function Members() {
     setStatusValue(selectedMember.status || 'active')
     setRenewPlan(selectedMember.plan_type || 'hot_desk')
 
-    fetch(`/api/checkins/status/${selectedMember.id}`, { credentials: 'include' })
+    fetch(`${API_BASE}/api/checkins/status/${selectedMember.id}`, { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         setCheckinStatus(data)
@@ -202,7 +203,7 @@ export default function Members() {
 
     // Refresh detail panel check-in status if name matches selected member
     if (selectedMember && selectedMember.name === latest.memberName) {
-      fetch(`/api/checkins/status/${selectedMember.id}`, { credentials: 'include' })
+      fetch(`${API_BASE}/api/checkins/status/${selectedMember.id}`, { credentials: 'include' })
         .then((r) => r.json())
         .then((data) => setCheckinStatus(data))
         .catch(() => {})
@@ -214,7 +215,7 @@ export default function Members() {
     if (!selectedMember) return
     setCheckinActionLoading(true)
     setCheckinError(null)
-    fetch('/api/checkins', {
+    fetch(`${API_BASE}/api/checkins`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -223,7 +224,7 @@ export default function Members() {
       .then((r) => r.json().then((d) => ({ ok: r.ok, data: d })))
       .then(({ ok, data }) => {
         if (!ok) throw new Error(data.error || 'Failed to check in')
-        return fetch(`/api/checkins/status/${selectedMember.id}`, { credentials: 'include' }).then((r) => r.json())
+        return fetch(`${API_BASE}/api/checkins/status/${selectedMember.id}`, { credentials: 'include' }).then((r) => r.json())
       })
       .then((status) => {
         setCheckinStatus(status)
@@ -247,7 +248,7 @@ export default function Members() {
     if (!selectedMember) return
     setCheckinActionLoading(true)
     setCheckinError(null)
-    fetch(`/api/checkins/checkout/${selectedMember.id}`, {
+    fetch(`${API_BASE}/api/checkins/checkout/${selectedMember.id}`, {
       method: 'PATCH',
       credentials: 'include',
     })
@@ -275,7 +276,7 @@ export default function Members() {
     if (!selectedMember || !renewPlan) return
     if (DEMO_MODE) { setDemoModal('renew or change this membership plan'); return }
     setRenewLoading(true)
-    fetch(`/api/members/${selectedMember.id}/renew`, {
+    fetch(`${API_BASE}/api/members/${selectedMember.id}/renew`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -325,7 +326,7 @@ export default function Members() {
     if (!selectedMember || !statusValue) return
     if (DEMO_MODE) { setDemoModal('change member status'); return }
     setStatusLoading(true)
-    fetch(`/api/members/${selectedMember.id}`, {
+    fetch(`${API_BASE}/api/members/${selectedMember.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -353,7 +354,7 @@ export default function Members() {
   const handleDeactivate = () => {
     if (!selectedMember) return
     setDeleteLoading(true)
-    fetch(`/api/members/${selectedMember.id}`, {
+    fetch(`${API_BASE}/api/members/${selectedMember.id}`, {
       method: 'DELETE',
       credentials: 'include',
     })

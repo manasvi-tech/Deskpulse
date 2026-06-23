@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { DemoModal } from '../components/DemoModal'
 import useStore from '../store/useStore'
+import { API_BASE } from '../config/api.js'
 
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true'
 
@@ -13,7 +14,7 @@ export default function Users() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/users', { credentials: 'include' })
+    fetch(`${API_BASE}/api/users`, { credentials: 'include' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
