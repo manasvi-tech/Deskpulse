@@ -73,3 +73,10 @@
 .driver-overlay {
   background: rgba(15, 23, 42, 0.6) !important;
 }
+
+@media (max-width: 768px) {
+  .deskpulse-tour-popover {
+    max-width: calc(100vw - 32px) !important;
+    font-size: 13px !important;
+  }
+}

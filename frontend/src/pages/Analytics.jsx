@@ -172,8 +172,8 @@ function ChurnPanel({ churnRisk }) {
           <thead>
             <tr className="border-b border-slate-100">
               <th className="text-left text-slate-400 text-xs font-medium pb-1">Member</th>
-              <th className="text-left text-slate-400 text-xs font-medium pb-1">Plan</th>
-              <th className="text-left text-slate-400 text-xs font-medium pb-1">Details</th>
+              <th className="hidden sm:table-cell text-left text-slate-400 text-xs font-medium pb-1">Plan</th>
+              <th className="hidden sm:table-cell text-left text-slate-400 text-xs font-medium pb-1">Details</th>
             </tr>
           </thead>
           <tbody>{members.slice(0, 8).map(renderRow)}</tbody>
@@ -191,8 +191,8 @@ function ChurnPanel({ churnRisk }) {
         renderRow={(m) => (
           <tr key={m.id} className="border-b border-slate-100">
             <td className="py-1 text-slate-700 text-xs">{m.name || '—'}</td>
-            <td className="py-1 text-slate-500 text-xs capitalize">{(m.plan_type || '').replace(/_/g, ' ')}</td>
-            <td className="py-1 text-amber-600 text-xs">
+            <td className="hidden sm:table-cell py-1 text-slate-500 text-xs capitalize">{(m.plan_type || '').replace(/_/g, ' ')}</td>
+            <td className="hidden sm:table-cell py-1 text-amber-600 text-xs">
               {m.days_until_expiry != null ? `${Math.max(0, Math.round(m.days_until_expiry))}d left` : '—'}
             </td>
           </tr>
@@ -205,8 +205,8 @@ function ChurnPanel({ churnRisk }) {
         renderRow={(m) => (
           <tr key={m.id} className="border-b border-slate-100">
             <td className="py-1 text-slate-700 text-xs">{m.name || '—'}</td>
-            <td className="py-1 text-slate-500 text-xs capitalize">{(m.plan_type || '').replace(/_/g, ' ')}</td>
-            <td className="py-1 text-slate-400 text-xs">
+            <td className="hidden sm:table-cell py-1 text-slate-500 text-xs capitalize">{(m.plan_type || '').replace(/_/g, ' ')}</td>
+            <td className="hidden sm:table-cell py-1 text-slate-400 text-xs">
               {m.days_since_checkin != null ? `${Math.round(m.days_since_checkin)}d ago` : 'Never'}
             </td>
           </tr>
@@ -369,7 +369,7 @@ export default function Analytics() {
   const ratioData   = body?.member_stats ?? null
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Analytics</h1>
         {selectedLocation && <p className="text-slate-500 text-sm mt-0.5">{selectedLocation.name}</p>}
@@ -385,8 +385,8 @@ export default function Analytics() {
 
       {!accessDenied && (
         <>
-          <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 bg-white rounded-xl p-5 border border-slate-200" data-tour="heatmap">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="col-span-1 lg:col-span-2 bg-white rounded-xl p-5 border border-slate-200" data-tour="heatmap">
               <h2 className="text-slate-900 font-semibold mb-4">Peak Hours Heatmap (Last 7 Days)</h2>
               {analyticsLoading ? <SkeletonBlock h="h-64" /> : <PeakHoursHeatmap heatmapData={heatmapData} />}
             </div>
@@ -422,7 +422,7 @@ export default function Analytics() {
             {analyticsLoading ? <SkeletonBlock h="h-52" /> : <RevenueChart revenueData={revenueData} />}
           </div>
 
-          <div className={`grid gap-6 ${user?.role !== 'frontdesk' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-6 ${user?.role !== 'frontdesk' ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
             <div className="bg-white rounded-xl p-5 border border-slate-200" data-tour="churn-panel">
               <h2 className="text-slate-900 font-semibold mb-3">Churn Risk Members</h2>
               {analyticsLoading ? <SkeletonBlock h="h-48" /> : <ChurnPanel churnRisk={churnRisk} />}

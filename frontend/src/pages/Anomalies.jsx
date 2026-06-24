@@ -136,8 +136,8 @@ export default function Anomalies() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 lg:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Anomaly Log</h1>
           <p className="text-slate-500 text-sm mt-0.5">
@@ -145,7 +145,7 @@ export default function Anomalies() {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2">
           <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
             {['all', 'active', 'resolved'].map((f) => (
               <button
@@ -197,7 +197,8 @@ export default function Anomalies() {
             </p>
           </div>
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">Location</th>
@@ -249,6 +250,7 @@ export default function Anomalies() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

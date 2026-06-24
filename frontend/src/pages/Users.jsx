@@ -44,7 +44,7 @@ export default function Users() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6">
       {demoModal && <DemoModal action={demoModal} onClose={() => setDemoModal(null)} />}
 
       <div className="flex items-center justify-between">
@@ -63,8 +63,8 @@ export default function Users() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[600px]">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
               <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">Name</th>

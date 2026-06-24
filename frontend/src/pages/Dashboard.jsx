@@ -47,7 +47,7 @@ function KpiCard({ label, value, sub, colorClass = 'text-slate-900' }) {
   return (
     <div className="bg-white rounded-xl p-5 border border-slate-200">
       <p className="text-slate-500 text-sm mb-1">{label}</p>
-      <p className={`text-4xl font-bold font-mono tabular-nums ${colorClass}`}>{value}</p>
+      <p className={`text-3xl lg:text-4xl font-bold font-mono tabular-nums ${colorClass}`}>{value}</p>
       {sub && <p className="text-slate-400 text-xs mt-1">{sub}</p>}
     </div>
   )
@@ -65,7 +65,7 @@ function SummaryBar({ locations }) {
   const animAnomalies = useCountUp(activeAnomalyCount)
 
   return (
-    <div className="grid grid-cols-3 gap-4 mb-6" data-tour="summary-bar">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" data-tour="summary-bar">
       <KpiCard
         label="Members Currently Checked In (All Locations)"
         value={animCheckins.toLocaleString('en-IN')}
@@ -264,7 +264,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6">
       <div className="flex justify-end">
         <button
           onClick={handleRestartTour}
@@ -275,14 +275,14 @@ export default function Dashboard() {
       </div>
 
       {locationsLoading ? (
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <SkeletonKpi /><SkeletonKpi /><SkeletonKpi />
         </div>
       ) : (
         <SummaryBar locations={locations} />
       )}
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="col-span-1 flex flex-col gap-6">
           {locationsLoading || !selectedLocation ? (
             <><SkeletonKpi /><SkeletonKpi /></>
@@ -294,7 +294,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="col-span-2 flex flex-col gap-6">
+        <div className="col-span-1 lg:col-span-2 flex flex-col gap-6">
           <ActivityFeed />
 
           <div>
@@ -302,13 +302,13 @@ export default function Dashboard() {
               {user?.role === 'frontdesk' ? 'Your Location' : 'All Locations'}
             </h2>
             {locationsLoading ? (
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[...Array(user?.role === 'frontdesk' ? 1 : 10)].map((_, i) => (
                   <div key={i} className="animate-pulse bg-white rounded-lg p-3 border border-slate-200 h-20" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {gridLocations.map((loc) => {
                   const pct = loc.capacity_pct ?? Math.round(((loc.current_occupancy || 0) / loc.capacity) * 100)
                   const isSelected = loc.id === effectiveLocationId

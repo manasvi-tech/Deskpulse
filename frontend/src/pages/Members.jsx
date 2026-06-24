@@ -7,6 +7,7 @@ import {
   Users,
   MapPin,
   RefreshCw,
+  ArrowLeft,
 } from 'lucide-react'
 import { DemoModal } from '../components/DemoModal'
 import useStore from '../store/useStore'
@@ -97,6 +98,9 @@ export default function Members() {
   const [locationFilter, setLocationFilter]   = useState('')
   const [page, setPage]                       = useState(1)
   const [selectedMember, setSelectedMember]   = useState(null)
+
+  // ── Mobile detail overlay ───────────────────────────────────────────────────
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
 
   // ── Right panel ─────────────────────────────────────────────────────────────
   const [checkinStatus, setCheckinStatus]             = useState(null)
@@ -190,7 +194,6 @@ export default function Members() {
     const latest = activityFeed[0]
     if (!latest || (latest.kind !== 'checkin' && latest.kind !== 'checkout')) return
 
-    // Update status badge in the list by matching member name
     setMembers((prev) =>
       prev.map((m) => {
         if (m.name !== latest.memberName) return m
@@ -201,7 +204,6 @@ export default function Members() {
       })
     )
 
-    // Refresh detail panel check-in status if name matches selected member
     if (selectedMember && selectedMember.name === latest.memberName) {
       fetch(`${API_BASE}/api/checkins/status/${selectedMember.id}`, { credentials: 'include' })
         .then((r) => r.json())
@@ -364,6 +366,7 @@ export default function Members() {
         setDeleteLoading(false)
         setDeleteConfirm(false)
         setSelectedMember(null)
+        setMobileDetailOpen(false)
         fetchMembers()
       })
       .catch((err) => {
@@ -376,15 +379,305 @@ export default function Members() {
   const startIdx = total === 0 ? 0 : (page - 1) * 20 + 1
   const endIdx   = Math.min(page * 20, total)
 
+  // ── Render detail content (shared between desktop panel and mobile overlay) ──
+  const renderDetailContent = () => {
+    if (!selectedMember) {
+      return (
+        <div className="h-full bg-white flex flex-col items-center justify-center text-center p-8">
+          <UserCheck size={40} className="text-slate-200 mb-3" />
+          <p className="text-lg text-slate-400 font-medium">Select a member</p>
+          <p className="text-sm text-slate-300 mt-1">Click any member to view details</p>
+        </div>
+      )
+    }
+
+    return (
+      <>
+        {/* Header */}
+        <div className="p-6 border-b border-slate-200 bg-white" data-tour="member-detail">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-xl font-semibold text-slate-600 shrink-0 select-none">
+              {initials(selectedMember.name)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-semibold text-slate-900">{selectedMember.name}</h2>
+                <StatusBadge status={selectedMember.display_status} />
+              </div>
+              <p className="text-sm text-slate-500 mt-0.5">{selectedMember.email}</p>
+              {selectedMember.phone && (
+                <p className="text-sm text-slate-500">{selectedMember.phone}</p>
+              )}
+              {selectedMember.location_name && (
+                <div className="flex items-center gap-1 mt-1">
+                  <MapPin size={12} className="text-slate-400 shrink-0" />
+                  <span className="text-xs text-slate-400">{selectedMember.location_name}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Check-in status card */}
+        <div className="mx-6 mt-6">
+          {checkinLoading ? (
+            <div className="p-4 rounded-xl border border-slate-200 animate-pulse bg-slate-100 h-20" />
+          ) : checkinStatus?.isCheckedIn ? (
+            <div className="p-4 rounded-xl border border-green-200 bg-green-50">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                <span className="text-sm font-medium text-green-700">Currently In Office</span>
+              </div>
+              {checkinStatus.checked_in_at && (
+                <p className="text-xs text-green-600 mt-1 ml-4">
+                  Checked in at {formatTime(checkinStatus.checked_in_at)}
+                </p>
+              )}
+              {checkinError && (
+                <p className="text-xs text-red-600 mt-2">{checkinError}</p>
+              )}
+              <button
+                onClick={handleCheckOut}
+                disabled={checkinActionLoading}
+                className="w-full mt-3 bg-white border border-green-300 text-green-700 hover:bg-green-50 text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {checkinActionLoading ? 'Processing...' : 'Check Out'}
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                <span className="text-sm font-medium text-slate-600">Not In Office</span>
+              </div>
+              {checkinError && (
+                <p className="text-xs text-red-600 mt-2">{checkinError}</p>
+              )}
+              <button
+                onClick={handleCheckIn}
+                disabled={checkinActionLoading || selectedMember.status !== 'active'}
+                className="w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {checkinActionLoading ? 'Processing...' : 'Check In'}
+              </button>
+              {selectedMember.status !== 'active' && (
+                <p className="text-xs text-slate-400 text-center mt-2">
+                  Member must be active to check in
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Membership card */}
+        <div className="mx-6 mt-4 p-4 rounded-xl border border-slate-200 bg-white">
+          <p className="text-sm font-semibold text-slate-700 mb-3">Current Membership</p>
+
+          {renewSuccess && (
+            <div className="mb-3 p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm">
+              Membership renewed successfully
+            </div>
+          )}
+
+          {selectedMember.plan_type ? (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${PLAN_COLOR[selectedMember.plan_type] || 'bg-slate-100 text-slate-600'}`}>
+                    {selectedMember.plan_type.replace(/_/g, ' ')}
+                  </span>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Started {formatDate(selectedMember.start_date)}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Expires {formatDate(selectedMember.end_date)}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  {(() => {
+                    const days = daysFromNow(selectedMember.end_date)
+                    if (days === null) return null
+                    if (days > 7)  return <span className="text-xs text-green-600 font-medium">{days} days left</span>
+                    if (days > 0)  return <span className="text-xs text-amber-600 font-medium">{days} days left</span>
+                    return <span className="text-xs text-red-600 font-medium">Expired {Math.abs(days)} days ago</span>
+                  })()}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (DEMO_MODE) { setDemoModal('renew or change this membership plan'); return }
+                  setRenewOpen((o) => !o)
+                }}
+                className="w-full mt-3 flex items-center justify-center bg-white border border-slate-200 hover:border-sky-300 hover:bg-sky-50 text-slate-700 hover:text-sky-700 text-sm px-4 py-2 rounded-lg transition-colors"
+              >
+                <RefreshCw size={14} className="mr-1.5" />
+                Renew / Change Plan
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-500">No active membership</p>
+              <button
+                onClick={() => {
+                  if (DEMO_MODE) { setDemoModal('add a membership plan'); return }
+                  setRenewOpen((o) => !o)
+                }}
+                className="w-full mt-3 flex items-center justify-center bg-white border border-slate-200 hover:border-sky-300 hover:bg-sky-50 text-slate-700 hover:text-sky-700 text-sm px-4 py-2 rounded-lg transition-colors"
+              >
+                <RefreshCw size={14} className="mr-1.5" />
+                Add Membership
+              </button>
+            </>
+          )}
+
+          {/* Inline renew modal */}
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+              renewOpen ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'
+            }`}
+          >
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
+              <p className="text-sm font-semibold text-slate-700 mb-3">Renew or Change Plan</p>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(PLAN_PRICE).map(([plan, price]) => (
+                  <button
+                    key={plan}
+                    onClick={() => setRenewPlan(plan)}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      renewPlan === plan
+                        ? 'border-sky-500 bg-sky-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-slate-800 capitalize">
+                      {plan.replace(/_/g, ' ')}
+                    </p>
+                    <p className="text-sm font-semibold text-sky-600">
+                      &#8377;{price.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-xs text-slate-400">{PLAN_DURATION_LABEL[plan]}</p>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleRenew}
+                disabled={renewLoading}
+                className="w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {renewLoading
+                  ? 'Processing...'
+                  : `Confirm Renewal — ₹${(PLAN_PRICE[renewPlan] || 0).toLocaleString('en-IN')}`}
+              </button>
+              <button
+                onClick={() => setRenewOpen(false)}
+                className="w-full mt-2 text-sm text-slate-400 hover:text-slate-600 text-center"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Member status edit */}
+        <div className="mx-6 mt-4 p-4 rounded-xl border border-slate-200 bg-white">
+          <p className="text-sm font-semibold text-slate-700 mb-3">Member Status</p>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs text-slate-500">Current:</span>
+            <StatusBadge status={selectedMember.display_status} />
+          </div>
+          <select
+            value={statusValue}
+            onChange={(e) => setStatusValue(e.target.value)}
+            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-300"
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="frozen">Frozen</option>
+          </select>
+          <button
+            onClick={handleStatusChange}
+            disabled={statusLoading || statusValue === selectedMember.status}
+            className="w-full mt-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {statusLoading ? 'Saving...' : 'Apply Status Change'}
+          </button>
+        </div>
+
+        {/* Danger zone */}
+        <div className="mx-6 mt-4 mb-6 p-4 rounded-xl border border-red-100 bg-red-50">
+          <p className="text-sm font-semibold text-red-700 mb-1">Danger Zone</p>
+          <p className="text-xs text-red-500 mb-3">
+            Deactivating a member will cancel their active membership.
+          </p>
+          {deleteConfirm ? (
+            <div className="space-y-2">
+              <p className="text-xs text-red-600 font-medium">
+                Are you sure? This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDeactivate}
+                  disabled={deleteLoading}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleteLoading ? 'Deactivating...' : 'Confirm'}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm(false)}
+                  className="flex-1 bg-white border border-slate-200 text-slate-600 text-sm px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                if (DEMO_MODE) { setDemoModal('deactivate this member'); return }
+                setDeleteConfirm(true)
+              }}
+              className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-50 text-sm px-4 py-2 rounded-lg transition-colors"
+            >
+              Deactivate Member
+            </button>
+          )}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div className="flex overflow-hidden bg-slate-50" style={{ height: 'calc(100vh - 56px)' }}>
       {demoModal && <DemoModal action={demoModal} onClose={() => setDemoModal(null)} />}
 
+      {/* ── Mobile Full-Screen Detail Overlay ───────────────────────────────── */}
+      <div
+        className={`lg:hidden fixed inset-0 bg-white z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+          mobileDetailOpen && selectedMember ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Back button bar */}
+        <div className="h-14 shrink-0 flex items-center px-4 border-b border-slate-200 bg-white sticky top-0 z-10">
+          <button
+            onClick={() => setMobileDetailOpen(false)}
+            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
+          >
+            <ArrowLeft size={18} />
+            <span className="text-sm font-medium">Back to Members</span>
+          </button>
+        </div>
+        {/* Scrollable detail content */}
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+          {renderDetailContent()}
+        </div>
+      </div>
+
       {/* ── LEFT PANEL — Member List ─────────────────────────────────────── */}
-      <div className="flex flex-col border-r border-slate-200 bg-white shrink-0" style={{ width: '55%' }}>
+      <div className="flex flex-col border-r border-slate-200 bg-white shrink-0 w-full lg:w-[55%]">
 
         {/* Header */}
-        <div className="px-6 pt-6 pb-4">
+        <div className="px-4 lg:px-6 pt-4 lg:pt-6 pb-3 lg:pb-4">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold text-slate-900">Members</h1>
@@ -403,7 +696,7 @@ export default function Members() {
         </div>
 
         {/* Search */}
-        <div className="px-6 pb-3">
+        <div className="px-4 lg:px-6 pb-3">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
@@ -426,7 +719,7 @@ export default function Members() {
 
         {/* Location filter — super_admin only */}
         {isSuperAdmin && (
-          <div className="px-6 pb-3">
+          <div className="px-4 lg:px-6 pb-3">
             <select
               value={locationFilter}
               onChange={(e) => { setLocationFilter(e.target.value); setPage(1) }}
@@ -441,14 +734,14 @@ export default function Members() {
         )}
 
         {/* Member list — scrollable */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" data-tour="members-list">
           {listError ? (
-            <div className="px-6 py-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
+            <div className="px-4 lg:px-6 py-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
               Failed to load members: {listError}
             </div>
           ) : listLoading ? (
             [...Array(5)].map((_, i) => (
-              <div key={i} className="px-6 py-3 border-b border-slate-100 flex items-center gap-3">
+              <div key={i} className="px-4 lg:px-6 py-3 border-b border-slate-100 flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full animate-pulse bg-slate-200 shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="animate-pulse bg-slate-200 rounded h-3 w-2/5" />
@@ -471,8 +764,11 @@ export default function Members() {
               return (
                 <div
                   key={m.id}
-                  onClick={() => setSelectedMember(m)}
-                  className={`px-6 py-3 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition-colors ${
+                  onClick={() => {
+                    setSelectedMember(m)
+                    setMobileDetailOpen(true)
+                  }}
+                  className={`px-4 lg:px-6 py-3 border-b border-slate-100 flex items-center gap-3 cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-sky-50 border-l-2 border-l-sky-500'
                       : 'hover:bg-slate-50'
@@ -496,9 +792,9 @@ export default function Members() {
 
         {/* Pagination */}
         {!listLoading && total > 0 && (
-          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between shrink-0">
-            <p className="text-sm text-slate-500">
-              Showing {startIdx}–{endIdx} of {total.toLocaleString()} members
+          <div className="px-4 lg:px-6 py-4 border-t border-slate-200 flex items-center justify-between shrink-0">
+            <p className="text-xs sm:text-sm text-slate-500">
+              {startIdx}–{endIdx} of {total.toLocaleString()}
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -521,268 +817,9 @@ export default function Members() {
         )}
       </div>
 
-      {/* ── RIGHT PANEL — Member Detail ──────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto bg-slate-50">
-        {!selectedMember ? (
-          <div className="h-full bg-white flex flex-col items-center justify-center text-center p-8">
-            <UserCheck size={40} className="text-slate-200 mb-3" />
-            <p className="text-lg text-slate-400 font-medium">Select a member</p>
-            <p className="text-sm text-slate-300 mt-1">Click any member to view details</p>
-          </div>
-        ) : (
-          <>
-            {/* Header */}
-            <div className="p-6 border-b border-slate-200 bg-white">
-              <div className="flex items-start gap-4">
-                <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-xl font-semibold text-slate-600 shrink-0 select-none">
-                  {initials(selectedMember.name)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-lg font-semibold text-slate-900">{selectedMember.name}</h2>
-                    <StatusBadge status={selectedMember.display_status} />
-                  </div>
-                  <p className="text-sm text-slate-500 mt-0.5">{selectedMember.email}</p>
-                  {selectedMember.phone && (
-                    <p className="text-sm text-slate-500">{selectedMember.phone}</p>
-                  )}
-                  {selectedMember.location_name && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <MapPin size={12} className="text-slate-400 shrink-0" />
-                      <span className="text-xs text-slate-400">{selectedMember.location_name}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Check-in status card */}
-            <div className="mx-6 mt-6">
-              {checkinLoading ? (
-                <div className="p-4 rounded-xl border border-slate-200 animate-pulse bg-slate-100 h-20" />
-              ) : checkinStatus?.isCheckedIn ? (
-                <div className="p-4 rounded-xl border border-green-200 bg-green-50">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                    <span className="text-sm font-medium text-green-700">Currently In Office</span>
-                  </div>
-                  {checkinStatus.checked_in_at && (
-                    <p className="text-xs text-green-600 mt-1 ml-4">
-                      Checked in at {formatTime(checkinStatus.checked_in_at)}
-                    </p>
-                  )}
-                  {checkinError && (
-                    <p className="text-xs text-red-600 mt-2">{checkinError}</p>
-                  )}
-                  <button
-                    onClick={handleCheckOut}
-                    disabled={checkinActionLoading}
-                    className="w-full mt-3 bg-white border border-green-300 text-green-700 hover:bg-green-50 text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {checkinActionLoading ? 'Processing...' : 'Check Out'}
-                  </button>
-                </div>
-              ) : (
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
-                    <span className="text-sm font-medium text-slate-600">Not In Office</span>
-                  </div>
-                  {checkinError && (
-                    <p className="text-xs text-red-600 mt-2">{checkinError}</p>
-                  )}
-                  <button
-                    onClick={handleCheckIn}
-                    disabled={checkinActionLoading || selectedMember.status !== 'active'}
-                    className="w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {checkinActionLoading ? 'Processing...' : 'Check In'}
-                  </button>
-                  {selectedMember.status !== 'active' && (
-                    <p className="text-xs text-slate-400 text-center mt-2">
-                      Member must be active to check in
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Membership card */}
-            <div className="mx-6 mt-4 p-4 rounded-xl border border-slate-200 bg-white">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Current Membership</p>
-
-              {renewSuccess && (
-                <div className="mb-3 p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm">
-                  Membership renewed successfully
-                </div>
-              )}
-
-              {selectedMember.plan_type ? (
-                <>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${PLAN_COLOR[selectedMember.plan_type] || 'bg-slate-100 text-slate-600'}`}>
-                        {selectedMember.plan_type.replace(/_/g, ' ')}
-                      </span>
-                      <p className="text-xs text-slate-500 mt-2">
-                        Started {formatDate(selectedMember.start_date)}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Expires {formatDate(selectedMember.end_date)}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      {(() => {
-                        const days = daysFromNow(selectedMember.end_date)
-                        if (days === null) return null
-                        if (days > 7)  return <span className="text-xs text-green-600 font-medium">{days} days left</span>
-                        if (days > 0)  return <span className="text-xs text-amber-600 font-medium">{days} days left</span>
-                        return <span className="text-xs text-red-600 font-medium">Expired {Math.abs(days)} days ago</span>
-                      })()}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      if (DEMO_MODE) { setDemoModal('renew or change this membership plan'); return }
-                      setRenewOpen((o) => !o)
-                    }}
-                    className="w-full mt-3 flex items-center justify-center bg-white border border-slate-200 hover:border-sky-300 hover:bg-sky-50 text-slate-700 hover:text-sky-700 text-sm px-4 py-2 rounded-lg transition-colors"
-                  >
-                    <RefreshCw size={14} className="mr-1.5" />
-                    Renew / Change Plan
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-slate-500">No active membership</p>
-                  <button
-                    onClick={() => {
-                      if (DEMO_MODE) { setDemoModal('add a membership plan'); return }
-                      setRenewOpen((o) => !o)
-                    }}
-                    className="w-full mt-3 flex items-center justify-center bg-white border border-slate-200 hover:border-sky-300 hover:bg-sky-50 text-slate-700 hover:text-sky-700 text-sm px-4 py-2 rounded-lg transition-colors"
-                  >
-                    <RefreshCw size={14} className="mr-1.5" />
-                    Add Membership
-                  </button>
-                </>
-              )}
-
-              {/* Inline renew modal */}
-              <div
-                className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                  renewOpen ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'
-                }`}
-              >
-                <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
-                  <p className="text-sm font-semibold text-slate-700 mb-3">Renew or Change Plan</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(PLAN_PRICE).map(([plan, price]) => (
-                      <button
-                        key={plan}
-                        onClick={() => setRenewPlan(plan)}
-                        className={`p-3 rounded-lg border text-left transition-all ${
-                          renewPlan === plan
-                            ? 'border-sky-500 bg-sky-50'
-                            : 'border-slate-200 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <p className="text-sm font-medium text-slate-800 capitalize">
-                          {plan.replace(/_/g, ' ')}
-                        </p>
-                        <p className="text-sm font-semibold text-sky-600">
-                          &#8377;{price.toLocaleString('en-IN')}
-                        </p>
-                        <p className="text-xs text-slate-400">{PLAN_DURATION_LABEL[plan]}</p>
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={handleRenew}
-                    disabled={renewLoading}
-                    className="w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {renewLoading
-                      ? 'Processing...'
-                      : `Confirm Renewal — ₹${(PLAN_PRICE[renewPlan] || 0).toLocaleString('en-IN')}`}
-                  </button>
-                  <button
-                    onClick={() => setRenewOpen(false)}
-                    className="w-full mt-2 text-sm text-slate-400 hover:text-slate-600 text-center"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Member status edit */}
-            <div className="mx-6 mt-4 p-4 rounded-xl border border-slate-200 bg-white">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Member Status</p>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs text-slate-500">Current:</span>
-                <StatusBadge status={selectedMember.display_status} />
-              </div>
-              <select
-                value={statusValue}
-                onChange={(e) => setStatusValue(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-300"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="frozen">Frozen</option>
-              </select>
-              <button
-                onClick={handleStatusChange}
-                disabled={statusLoading || statusValue === selectedMember.status}
-                className="w-full mt-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {statusLoading ? 'Saving...' : 'Apply Status Change'}
-              </button>
-            </div>
-
-            {/* Danger zone */}
-            <div className="mx-6 mt-4 mb-6 p-4 rounded-xl border border-red-100 bg-red-50">
-              <p className="text-sm font-semibold text-red-700 mb-1">Danger Zone</p>
-              <p className="text-xs text-red-500 mb-3">
-                Deactivating a member will cancel their active membership.
-              </p>
-              {deleteConfirm ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-red-600 font-medium">
-                    Are you sure? This action cannot be undone.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleDeactivate}
-                      disabled={deleteLoading}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {deleteLoading ? 'Deactivating...' : 'Confirm'}
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(false)}
-                      className="flex-1 bg-white border border-slate-200 text-slate-600 text-sm px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => {
-                    if (DEMO_MODE) { setDemoModal('deactivate this member'); return }
-                    setDeleteConfirm(true)
-                  }}
-                  className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-50 text-sm px-4 py-2 rounded-lg transition-colors"
-                >
-                  Deactivate Member
-                </button>
-              )}
-            </div>
-          </>
-        )}
+      {/* ── RIGHT PANEL — Member Detail (desktop only) ───────────────────── */}
+      <div className="hidden lg:flex flex-1 overflow-y-auto bg-slate-50 flex-col">
+        {renderDetailContent()}
       </div>
     </div>
   )

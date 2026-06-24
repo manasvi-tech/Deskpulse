@@ -7,7 +7,7 @@ function occupancyBadgeCls(pct) {
   return 'text-red-600'
 }
 
-export default function LocationSwitcher({ user, locations, selectedLocationId, selectLocation }) {
+export default function LocationSwitcher({ user, locations, selectedLocationId, selectLocation, compact = false }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -23,38 +23,44 @@ export default function LocationSwitcher({ user, locations, selectedLocationId, 
   // Frontdesk — static display only
   if (user?.role === 'frontdesk') {
     const loc = locations.find((l) => l.id === user.location_id)
+    const name = loc?.name || 'Loading...'
+    const displayName = compact ? (name.split('—')[1]?.trim() || name.split(' ')[0]) : name
     return (
       <div className="flex items-center gap-1.5">
         <Building2 size={14} className="text-slate-400 shrink-0" />
-        <span className="text-sm text-slate-600 font-medium">{loc?.name || 'Loading...'}</span>
+        <span className={`text-sm text-slate-600 font-medium ${compact ? 'max-w-[90px] truncate' : ''}`}>
+          {displayName}
+        </span>
       </div>
     )
   }
 
   // Super admin — dropdown
   const selected = locations.find((l) => l.id === selectedLocationId)
+  const displayName = compact
+    ? (selected?.name?.split(' ')[0] || (locations.length === 0 ? '…' : 'Select'))
+    : (selected?.name || (locations.length === 0 ? 'Loading…' : 'Select location'))
 
   return (
     <div className="relative" ref={ref} data-tour="location-switcher">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 font-medium flex items-center gap-2 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+        className={`bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 font-medium flex items-center gap-2 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer ${compact ? 'max-w-[120px]' : ''}`}
       >
-        <span>{selected?.name || (locations.length === 0 ? 'Loading…' : 'Select location')}</span>
+        <span className={compact ? 'truncate' : ''}>{displayName}</span>
         <ChevronDown
           size={14}
-          className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`text-slate-400 transition-transform duration-200 shrink-0 ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg p-2 w-72 z-50"
-          style={{
-            opacity: open ? 1 : 0,
-            transform: open ? 'translateY(0)' : 'translateY(-4px)',
-            transition: 'opacity 200ms, transform 200ms',
-          }}
+          className={`bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-50 max-h-[60vh] overflow-y-auto ${
+            compact
+              ? 'fixed left-4 right-4 top-14'
+              : 'absolute right-0 top-full mt-2 w-72'
+          }`}
         >
           {locations.map((loc) => {
             const pct =
@@ -78,7 +84,7 @@ export default function LocationSwitcher({ user, locations, selectedLocationId, 
                   <div className="font-medium">{loc.name}</div>
                   <div className="text-xs text-slate-400">{loc.city}</div>
                 </div>
-                <span className={`text-xs font-bold ${occupancyBadgeCls(pct)}`}>{pct}%</span>
+                <span className={`text-xs font-bold shrink-0 ml-2 ${occupancyBadgeCls(pct)}`}>{pct}%</span>
               </button>
             )
           })}

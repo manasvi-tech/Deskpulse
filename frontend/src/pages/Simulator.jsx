@@ -57,7 +57,7 @@ export default function Simulator() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Simulator Controls</h1>
         <p className="text-slate-500 text-sm mt-0.5">
@@ -73,7 +73,7 @@ export default function Simulator() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6 max-w-2xl" data-tour="simulator-controls">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-2xl" data-tour="simulator-controls">
         {/* Status card */}
         <div className="bg-white rounded-xl p-6 border border-slate-200">
           <p className="text-slate-500 text-sm font-medium mb-3">Simulator Status</p>

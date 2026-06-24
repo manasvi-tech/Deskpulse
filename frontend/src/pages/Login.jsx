@@ -35,7 +35,7 @@ export default function Login() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Main card */}
-        <div className="bg-white border border-slate-200 rounded-xl p-8 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-900">DeskPulse</h1>
             <p className="text-slate-500 text-sm mt-1">Operations Intelligence</p>

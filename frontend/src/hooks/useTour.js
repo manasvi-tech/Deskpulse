@@ -338,6 +338,7 @@ export function useTour(user, navigate, isAuthenticated) {
       nextBtnText: 'Next →',
       prevBtnText: '← Back',
       doneBtnText: 'Got it, let me explore',
+      popoverClass: 'deskpulse-tour-popover',
       onDestroyStarted: () => {
         if (!d.hasNextStep()) {
           // Final step done button or X on last step — complete silently
